@@ -110,23 +110,3 @@ stages:
         echo "5. Checking Private DNS Zone:"
         nslookup $(KeyVaultName).privatelink.vaultcore.azure.net
       displayName: 'Network Troubleshooting'
-    displayName: 'Retrieve and Verify Secret'
-    steps:
-    - task: AzureCLI@2
-      displayName: 'Read timestamp from Key Vault (Linux)'
-      inputs:
-        azureSubscription: 'LabKeyVaultConnection'
-        scriptType: bash
-        scriptLocation: 'inlineScript'
-        inlineScript: |
-          echo "Reading secret from Key Vault: $(KeyVaultName)"
-          
-          # Read the secret
-          secretValue=$(az keyvault secret show --vault-name "$(KeyVaultName)" --name "PipelineRunInfo" --query "value" -o tsv)
-          
-          echo "✅ Secret retrieved successfully:"
-          echo "Value: $secretValue"
-          
-          # Also read the original test secret
-          testSecret=$(az keyvault secret show --vault-name "$(KeyVaultName)" --name "TestSecret" --query "value" -o tsv)
-          echo "✅ Test secret value: $testSecret"
