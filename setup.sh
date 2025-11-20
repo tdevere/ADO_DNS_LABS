@@ -17,17 +17,15 @@ NC='\033[0m' # No Color
 # Header
 clear
 cat << 'EOF'
-╔════════════════════════════════════════════════════════════╗
-║                                                            ║
-║        🧪 Azure DNS Troubleshooting Lab Setup              ║
-║                                                            ║
-║  This wizard will help you set up the DNS lab environment ║
-║                                                            ║
-╚════════════════════════════════════════════════════════════╝
+==================================================
+        Azure DNS Troubleshooting Lab Setup
+                                                            
+  This wizard will help you set up the DNS lab environment 
+==================================================
 
 EOF
 
-echo -e "${BLUE}📋 Prerequisites Check${NC}\n"
+echo -e "${BLUE}Prerequisites Check${NC}\n"
 
 # Function to check if command exists
 command_exists() {
@@ -37,9 +35,9 @@ command_exists() {
 # Function to print status
 print_status() {
     if [ $1 -eq 0 ]; then
-        echo -e "  ${GREEN}✅${NC} $2"
+        echo -e "  ${GREEN}[OK]${NC} $2"
     else
-        echo -e "  ${RED}❌${NC} $2"
+        echo -e "  ${RED}[FAIL]${NC} $2"
     fi
 }
 
@@ -89,19 +87,19 @@ fi
 echo ""
 
 if [ "$PREREQS_OK" = false ]; then
-    echo -e "${RED}❌ Some required tools are missing. Please install them and run this script again.${NC}"
+    echo -e "${RED}[FAIL] Some required tools are missing. Please install them and run this script again.${NC}"
     exit 1
 fi
 
 # Check Azure authentication
-echo -e "${BLUE}🔐 Azure Authentication Check${NC}\n"
+echo -e "${BLUE}Azure Authentication Check${NC}\n"
 
 if az account show &>/dev/null; then
     SUBSCRIPTION_NAME=$(az account show --query name -o tsv)
     SUBSCRIPTION_ID=$(az account show --query id -o tsv)
-    echo -e "  ${GREEN}✅${NC} Authenticated to Azure"
-    echo -e "  📌 Current subscription: ${YELLOW}$SUBSCRIPTION_NAME${NC}"
-    echo -e "  🆔 Subscription ID: ${YELLOW}$SUBSCRIPTION_ID${NC}"
+    echo -e "  ${GREEN}[OK]${NC} Authenticated to Azure"
+    echo -e "  Current subscription: ${YELLOW}$SUBSCRIPTION_NAME${NC}"
+    echo -e "  Subscription ID: ${YELLOW}$SUBSCRIPTION_ID${NC}"
     echo ""
     
     read -p "Is this the correct subscription for the lab? (y/n): " -n 1 -r
@@ -113,21 +111,21 @@ if az account show &>/dev/null; then
         exit 1
     fi
 else
-    echo -e "  ${RED}❌${NC} Not authenticated to Azure"
+    echo -e "  ${RED}[FAIL]${NC} Not authenticated to Azure"
     echo -e "${YELLOW}Please run: az login${NC}"
     exit 1
 fi
 
 # Check SSH key
-echo -e "\n${BLUE}🔑 SSH Key Check${NC}\n"
+echo -e "\n${BLUE}SSH Key Check${NC}\n"
 
 SSH_KEY_PATH="$HOME/.ssh/terraform_lab_key"
 SSH_PUB_KEY_PATH="$HOME/.ssh/terraform_lab_key.pub"
 
 if [ -f "$SSH_PUB_KEY_PATH" ]; then
-    echo -e "  ${GREEN}✅${NC} SSH key found: $SSH_PUB_KEY_PATH"
+    echo -e "  ${GREEN}[OK]${NC} SSH key found: $SSH_PUB_KEY_PATH"
 else
-    echo -e "  ${RED}❌${NC} SSH key not found: $SSH_PUB_KEY_PATH"
+    echo -e "  ${RED}[FAIL]${NC} SSH key not found: $SSH_PUB_KEY_PATH"
     echo ""
     read -p "Would you like to generate an SSH key now? (y/n): " -n 1 -r
     echo
@@ -136,53 +134,15 @@ else
         ssh-keygen -t rsa -b 4096 -f "$SSH_KEY_PATH" -N "" -C "terraform-lab-key"
         chmod 600 "$SSH_KEY_PATH"
         chmod 644 "$SSH_PUB_KEY_PATH"
-        echo -e "${GREEN}✅ SSH key generated successfully${NC}"
+        echo -e "${GREEN}[OK] SSH key generated successfully${NC}"
     else
-        echo -e "${RED}❌ SSH key is required. Please generate one manually or run this script again.${NC}"
+        echo -e "${RED}[FAIL] SSH key is required. Please generate one manually or run this script again.${NC}"
         exit 1
     fi
 fi
 
-# Choose lab path
-echo -e "\n${BLUE}📖 Choose Your Lab Path${NC}\n"
-
-cat << 'EOF'
-Two paths are available:
-
-  A) Full Experience (with Azure DevOps)
-     - Includes pipeline testing
-     - Requires Azure DevOps setup (~30-40 min)
-     - Best for: Learning CI/CD integration
-
-  B) Simplified (Direct VM Testing) ⭐ RECOMMENDED
-     - Focus on DNS troubleshooting
-     - No Azure DevOps needed (~15-20 min)
-     - Best for: Learning DNS concepts quickly
-
-EOF
-
-read -p "Which path would you like to follow? (A/B): " -n 1 -r LAB_PATH
-echo ""
-
-if [[ $LAB_PATH =~ ^[Aa]$ ]]; then
-    CHOSEN_PATH="A"
-    echo -e "${YELLOW}You chose Path A (Full Experience with Azure DevOps)${NC}"
-    echo -e "Next steps:"
-    echo -e "  1. See ${BLUE}docs/PATH_A_WITH_ADO.md${NC} for Azure DevOps setup"
-    echo -e "  2. See ${BLUE}docs/RESOURCES.md${NC} for resource creation guide"
-    echo -e "  3. Continue with Terraform deployment below"
-else
-    CHOSEN_PATH="B"
-    echo -e "${GREEN}You chose Path B (Simplified Direct Testing) ⭐${NC}"
-    echo -e "Next steps:"
-    echo -e "  1. See ${BLUE}docs/PATH_B_DIRECT.md${NC} for lab guide"
-    echo -e "  2. Continue with Terraform deployment below"
-fi
-
 # Terraform setup
-echo -e "\n${BLUE}🏗️  Terraform Configuration${NC}\n"
-
-cd terraform
+echo -e "\n${BLUE}Terraform Configuration${NC}\n"
 
 if [ ! -f "terraform.tfvars" ]; then
     if [ -f "terraform.tfvars.example" ]; then
@@ -201,70 +161,74 @@ if [ ! -f "terraform.tfvars" ]; then
             sed -i "s|^admin_ssh_key.*|admin_ssh_key = \"$SSH_PUB_KEY\"|" terraform.tfvars
         fi
         
-        echo -e "${GREEN}✅ terraform.tfvars created${NC}"
-        echo -e "${YELLOW}📝 Please review and customize terraform.tfvars if needed:${NC}"
+        echo -e "${GREEN}[OK] terraform.tfvars created${NC}"
+        echo -e "${YELLOW}Please review and customize terraform.tfvars if needed:${NC}"
         echo -e "   - key_vault_name (must be globally unique)"
         echo -e "   - resource group names"
         echo -e "   - admin_password"
         echo ""
         read -p "Press Enter to continue after reviewing terraform.tfvars..."
     else
-        echo -e "${RED}❌ terraform.tfvars.example not found${NC}"
-        exit 1
+        echo -e "${RED}[FAIL] terraform.tfvars.example not found${NC}"
+        # Create a basic tfvars if example is missing
+        echo -e "${YELLOW}Creating basic terraform.tfvars...${NC}"
+        SSH_PUB_KEY=$(cat "$SSH_PUB_KEY_PATH")
+        cat > terraform.tfvars <<EOF
+admin_ssh_key = "$SSH_PUB_KEY"
+EOF
+        echo -e "${GREEN}[OK] terraform.tfvars created${NC}"
     fi
 else
-    echo -e "${GREEN}✅ terraform.tfvars already exists${NC}"
+    echo -e "${GREEN}[OK] terraform.tfvars already exists${NC}"
 fi
 
 # Initialize Terraform
-echo -e "\n${BLUE}🔧 Terraform Initialization${NC}\n"
+echo -e "\n${BLUE}Terraform Initialization${NC}\n"
 
 if [ ! -d ".terraform" ]; then
     echo -e "${YELLOW}Initializing Terraform...${NC}"
     terraform init
-    echo -e "${GREEN}✅ Terraform initialized${NC}"
+    echo -e "${GREEN}[OK] Terraform initialized${NC}"
 else
-    echo -e "${GREEN}✅ Terraform already initialized${NC}"
+    echo -e "${GREEN}[OK] Terraform already initialized${NC}"
+fi
+
+# Update pipeline.yml with placeholder (user will run terraform apply later)
+echo -e "\n${BLUE}Configuring Pipeline Template${NC}"
+if [ -f "pipeline.yml" ]; then
+    # We can't get the KV name yet because terraform apply hasn't run.
+    # But we can instruct the user or add a helper script.
+    echo -e "${YELLOW}Note: After 'terraform apply', update 'pipeline.yml' with your Key Vault name.${NC}"
+    echo -e "${YELLOW}Or run: sed -i \"s/REPLACE_ME_WITH_KV_NAME/\$(terraform output -raw key_vault_name)/g\" pipeline.yml${NC}"
 fi
 
 # Summary
-echo -e "\n${GREEN}✅ Setup Complete!${NC}\n"
+echo -e "\n${GREEN}Setup Complete!${NC}\n"
 
-cat << EOF
-╔════════════════════════════════════════════════════════════╗
-║                   🎉 Setup Successful                      ║
-╚════════════════════════════════════════════════════════════╝
+echo -e "==================================================
+                   Setup Successful
+==================================================
 
 Next Steps:
 
 1. Review your Terraform configuration:
-   ${BLUE}cd terraform${NC}
-   ${BLUE}terraform plan${NC}
+   ${BLUE}terraform plan -out=tfplan${NC}
+   (Note: Plan files are git-ignored to prevent leaking secrets)
 
 2. Deploy the infrastructure:
-   ${BLUE}terraform apply${NC}
+   ${BLUE}terraform apply tfplan${NC}
 
-3. Follow your chosen lab path:
-EOF
+3. Follow the lab guide:
+   ${BLUE}docs/LAB_GUIDE.md${NC}
+   - Register Azure DevOps agents
+   - Create service connections
+   - Run pipeline tests
 
-if [ "$CHOSEN_PATH" = "A" ]; then
-    echo -e "   ${BLUE}Path A:${NC} docs/PATH_A_WITH_ADO.md"
-    echo -e "   - Register Azure DevOps agents"
-    echo -e "   - Create service connections"
-    echo -e "   - Run pipeline tests"
-else
-    echo -e "   ${BLUE}Path B:${NC} docs/PATH_B_DIRECT.md"
-    echo -e "   - SSH to test VM"
-    echo -e "   - Run DNS troubleshooting exercises"
-    echo -e "   - Test directly from VMs"
-fi
+4. When finished, clean up resources:
+   ${BLUE}terraform destroy${NC}
 
-echo ""
-echo -e "4. When finished, clean up resources:"
-echo -e "   ${BLUE}terraform destroy${NC}"
-echo ""
-echo -e "📚 Documentation: ${BLUE}labs/dns-standalone/README.md${NC}"
-echo -e "❓ Troubleshooting: ${BLUE}docs/TROUBLESHOOTING.md${NC}"
-echo ""
-echo -e "${GREEN}Happy troubleshooting! 🚀${NC}"
-echo ""
+Documentation: ${BLUE}docs/LAB_GUIDE.md${NC}
+Troubleshooting: ${BLUE}docs/TROUBLESHOOTING.md${NC}
+
+Happy troubleshooting!"
+

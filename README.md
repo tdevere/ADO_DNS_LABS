@@ -165,23 +165,11 @@ See [docs/RESOURCES.md](docs/RESOURCES.md) for detailed guidance.
 
 ## 🎓 Learning Modules
 
-### Lab 1: DNS A Record Misconfiguration
-**Scenario:** DNS A record points to wrong private IP  
-**Symptoms:** Connection fails despite successful DNS resolution  
-**Fix:** Correct the A record to point to actual private endpoint IP  
-**Duration:** 60-75 minutes
-
-### Lab 2: Missing VNet Links
-**Scenario:** Private DNS zone lacks VNet links  
-**Symptoms:** DNS resolution fails completely (NXDOMAIN)  
-**Fix:** Create virtual network links to Private DNS zone  
-**Duration:** 55-70 minutes
-
-### Lab 3: Custom DNS Configuration
-**Scenario:** Custom DNS server forwards to wrong upstream  
-**Symptoms:** Queries return public IP instead of private  
-**Fix:** Configure conditional forwarding to Azure DNS  
-**Duration:** 75-90 minutes
+| Module | Description | Duration |
+| :--- | :--- | :--- |
+| **[DNS LAB 1: Connectivity Failure](labs/lab1/README.md)** | Diagnose why the pipeline cannot reach Key Vault despite successful DNS resolution. | 60 min |
+| **[Lab 2: Missing VNet Link](labs/lab2/README.md)** | Fix "Split-Horizon" DNS issues where private zones are unreachable. | 45 min |
+| **[Lab 3: Custom DNS Misconfiguration](labs/lab3/README.md)** | Troubleshoot custom DNS forwarders and conditional forwarding. | 60 min |
 
 ---
 

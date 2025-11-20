@@ -16,12 +16,12 @@ NC='\033[0m'
 
 # Get Key Vault name from command line or terraform
 if [ -z "$1" ]; then
-    if [ -f "../terraform/terraform.tfvars" ]; then
-        KV_NAME=$(grep "^key_vault_name" ../terraform/terraform.tfvars | cut -d'"' -f2)
+    if [ -f "../terraform.tfvars" ]; then
+        KV_NAME=$(grep "^key_vault_name" ../terraform.tfvars | cut -d'"' -f2)
     else
         echo -e "${RED}❌ Please provide Key Vault name as argument${NC}"
         echo "Usage: $0 <keyvault-name>"
-        echo "Or run from labs/dns-standalone/ directory with terraform.tfvars configured"
+        echo "Or run from root directory with terraform.tfvars configured"
         exit 1
     fi
 else

@@ -44,12 +44,14 @@ variable "admin_password" {
   sensitive   = true
 }
 
+variable "admin_ssh_key" {
+  description = "SSH Public Key for VM authentication"
+  type        = string
+}
+
 variable "lab_scenario" {
   description = "Controls the lab state: 'base' (working) or 'dns_exercise1' (broken)"
   default     = "base"
 }
 
-variable "sp_object_id" {
-  description = "Object ID of the Service Principal for the Service Connection"
-  type        = string
-}
+

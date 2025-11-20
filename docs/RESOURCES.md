@@ -81,23 +81,21 @@ cat ~/.ssh/terraform_lab_key.pub
 
 ---
 
-## Optional Resources (Path A Only - Azure DevOps)
+## Azure DevOps Resources
 
-These resources are **only required if you choose Path A** (Full Pipeline Experience). 
+These resources are **required** for the lab.
 
 ### Summary Table
-
-#### Path B (Recommended - Direct VM Testing)
 
 | Resource | Required? | Creation Method | Estimated Time |
 |----------|-----------|----------------|----------------|
 | Azure Subscription | ✅ Yes | Manual (one-time) | 10-15 min |
 | SSH Key Pair | ✅ Yes | Script/Manual | 1 min |
-| Azure DevOps Org | ❌ No | N/A | N/A |
+| Azure DevOps Org | ✅ Yes | Manual (one-time) | 5 min |
+| Agent Pool | ✅ Yes | Manual/Script | 2 min |
+| Service Connection | ✅ Yes | Manual/Script | 3 min |
 
-**Total Setup Time:** ~15-20 minutes
-
-#### Path A (Full Pipeline Experience)
+**Total Setup Time:** ~30-40 minutes
 
 | Resource | Required? | Creation Method | Estimated Time |
 |----------|-----------|----------------|----------------|
@@ -111,54 +109,11 @@ These resources are **only required if you choose Path A** (Full Pipeline Experi
 
 **Total Setup Time:** ~30-40 minutes
 
-For detailed Azure DevOps setup instructions, see the original [EXE_02_CONFIGURE_ADO](../../EXE_02_CONFIGURE_ADO/EXE_02_CONFIGURE_ADO.md) documentation.
-
----
-
-## Best Approach for Students
-
-### Recommended: Path B (Direct VM Testing)
-
-**Why This is Better for a Standalone Lab:**
-
-1. **Minimal External Dependencies**
-   - Only requires Azure subscription (which students already need)
-   - No third-party service setup (Azure DevOps)
-   - Focuses on DNS troubleshooting, not CI/CD setup
-
-2. **Faster Time to Learning**
-   - 15-20 minutes setup vs 30-40 minutes
-   - Start troubleshooting DNS issues immediately
-   - Less context switching between Azure and Azure DevOps
-
-3. **Lower Complexity**
-   - Fewer moving parts
-   - Easier troubleshooting
-   - More focused learning objectives
-
-4. **Real-World Relevance**
-   - SSH to VMs is common in production troubleshooting
-   - Direct DNS testing mirrors real debugging workflows
-   - Skills transfer to any cloud provider
-
-5. **Student Subscription Friendly**
-   - Students can use their own Azure subscriptions
-   - No need to create Azure DevOps organizations
-   - Works in any Azure tenant
-
-### When to Use Path A
-
-Path A (with Azure DevOps) is valuable when:
-- Students specifically need to learn Azure DevOps integration
-- Course curriculum includes CI/CD pipelines
-- Building on existing Azure DevOps knowledge
-- Preparing for Azure DevOps-focused roles
-
 ---
 
 ## Cost Management
 
-### Estimated Costs (Path B)
+### Estimated Costs
 
 **Per Day (8 hours runtime):**
 - 1x Standard_B1ms Linux VM: ~$1.50
@@ -185,15 +140,10 @@ terraform destroy -auto-approve
 
 After understanding resource requirements:
 
-**Path B (Recommended):**
 1. Ensure Azure subscription is ready
 2. Generate SSH keys
-3. Continue to [PATH_B_DIRECT.md](PATH_B_DIRECT.md)
-
-**Path A (Advanced):**
-1. Complete Path B requirements
-2. Create Azure DevOps resources
-3. Continue to [PATH_A_WITH_ADO.md](PATH_A_WITH_ADO.md)
+3. Create Azure DevOps resources
+4. Continue to [LAB_GUIDE.md](LAB_GUIDE.md)
 
 ---
 

@@ -7,46 +7,15 @@ packages:
   - libssl1.1
   - libicu66
 
-write_files:
-  - path: /home/${admin_username}/install_agent.sh
-    permissions: '0755'
-    owner: ${admin_username}:${admin_username}
-    content: |
-      #!/bin/bash
-      set -e
-      
-      ORG_URL="${ado_org_url}"
-      PAT="${ado_pat}"
-      POOL="${ado_pool_name}"
-      AGENT_NAME="dns-lab-agent-$(hostname)"
-
-      echo "Installing Azure CLI..."
-      curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
-
-      echo "Setting up Azure DevOps Agent..."
-      mkdir -p /home/${admin_username}/azagent
-      cd /home/${admin_username}/azagent
-
-      # Download Agent (using a fixed recent version for stability)
-      curl -O https://vstsagentpackage.azureedge.net/agent/3.220.5/vsts-agent-linux-x64-3.220.5.tar.gz
-      tar zxvf vsts-agent-linux-x64-3.220.5.tar.gz
-
-      # Configure
-      # We use --replace to overwrite if it exists from a previous run
-      ./config.sh --unattended \
-        --url "$ORG_URL" \
-        --auth pat --token "$PAT" \
-        --pool "$POOL" \
-        --agent "$AGENT_NAME" \
-        --replace \
-        --acceptTeeEula
-
-      # Install and Start Service
-      sudo ./svc.sh install
-      sudo ./svc.sh start
-      
-      echo "Agent $AGENT_NAME started in pool $POOL"
-
 runcmd:
-  # Run the installation script as the admin user
-  - su - ${admin_username} -c "/home/${admin_username}/install_agent.sh"
+  # Create agent directory
+  - mkdir -p /home/azureuser/azagent
+  - chown azureuser:azureuser /home/azureuser/azagent
+  
+  # Download Agent (pre-downloading saves time later)
+  - cd /home/azureuser/azagent
+  - curl -O https://download.agent.dev.azure.com/agent/4.264.2/vsts-agent-linux-x64-4.264.2.tar.gz
+  - tar zxvf vsts-agent-linux-x64-4.264.2.tar.gz
+  - chown -R azureuser:azureuser /home/azureuser/azagent
+  
+  # Note: Configuration happens post-deployment via scripts/register-agent.sh
