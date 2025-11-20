@@ -28,6 +28,12 @@ fi
 # Load ADO configuration
 source .ado.env
 
+# Install Azure DevOps extension if not present to avoid prompts
+if ! az extension show --name azure-devops >/dev/null 2>&1; then
+    echo "Installing Azure DevOps extension..."
+    az extension add --name azure-devops
+fi
+
 # 2. Get Azure subscription details
 echo -e "${BLUE}1️⃣  Fetching Azure Subscription Details${NC}"
 SUBSCRIPTION_ID=$(az account show --query id -o tsv)
@@ -122,17 +128,9 @@ git config --unset core.hookspath
 echo -e "\n${BLUE}6️⃣  Creating Service Connection${NC}"
 SERVICE_CONNECTION_NAME="LabConnection"
 
-# Check if service connection already exists
-EXISTING_SC=$(az devops service-endpoint list \
-    --organization "$ADO_ORG_URL" \
-    --project "$ADO_PROJECT" \
-    --query "[?name=='$SERVICE_CONNECTION_NAME'].id" -o tsv 2>/dev/null || echo "")
-
-if [ -n "$EXISTING_SC" ]; then
-    echo -e "${YELLOW}⚠️  Service Connection '$SERVICE_CONNECTION_NAME' already exists.${NC}"
-    SERVICE_ENDPOINT_ID="$EXISTING_SC"
-else
-    echo -e "${YELLOW}Creating Service Connection '$SERVICE_CONNECTION_NAME'...${NC}"
+create_service_connection() {
+    local name="$1"
+    echo -e "${YELLOW}Creating Service Connection '$name'...${NC}"
     
     # Create service principal for the service connection
     SP_NAME="sp-ado-lab-$(date +%s)"
@@ -150,9 +148,9 @@ else
     sleep 10
     
     # Create service connection using REST API
-    SERVICE_CONNECTION_JSON=$(cat <<EOF
+        SERVICE_CONNECTION_JSON=$(cat <<EOF
 {
-  "name": "$SERVICE_CONNECTION_NAME",
+    "name": "$name",
   "type": "azurerm",
   "url": "https://management.azure.com/",
   "authorization": {
@@ -178,7 +176,7 @@ else
       "projectReference": {
         "name": "$ADO_PROJECT"
       },
-      "name": "$SERVICE_CONNECTION_NAME"
+            "name": "$name"
     }
   ]
 }
@@ -196,40 +194,54 @@ EOF
     if [ -n "$SERVICE_ENDPOINT_ID" ] && [ "$SERVICE_ENDPOINT_ID" != "null" ]; then
         echo -e "${GREEN}✅ Service Connection created (ID: $SERVICE_ENDPOINT_ID).${NC}"
     else
-        # Detect duplicate error where connection already exists but not listed
         if echo "$SC_RESPONSE" | grep -q 'DuplicateServiceConnectionException'; then
-            echo -e "${YELLOW}⚠️ Service connection '$SERVICE_CONNECTION_NAME' already exists (duplicate detected).${NC}"
-            # Try to fetch the ID of the existing connection
+            echo -e "${YELLOW}⚠️ Service connection '$name' already exists (duplicate detected).${NC}"
             SERVICE_ENDPOINT_ID=$(az devops service-endpoint list \
                 --organization "$ADO_ORG_URL" \
                 --project "$ADO_PROJECT" \
-                --query "[?name=='$SERVICE_CONNECTION_NAME'].id" -o tsv 2>/dev/null || echo "")
-
-            # Fallback: Check for AzureLabConnection if LabConnection is not found
-            if [ -z "$SERVICE_ENDPOINT_ID" ]; then
-                FALLBACK_SC="AzureLabConnection"
-                FALLBACK_ID=$(az devops service-endpoint list \
-                    --organization "$ADO_ORG_URL" \
-                    --project "$ADO_PROJECT" \
-                    --query "[?name=='$FALLBACK_SC'].id" -o tsv 2>/dev/null || echo "")
-                
-                if [ -n "$FALLBACK_ID" ]; then
-                    SERVICE_ENDPOINT_ID="$FALLBACK_ID"
-                    echo -e "${YELLOW}⚠️ Using existing connection '$FALLBACK_SC' instead of '$SERVICE_CONNECTION_NAME'.${NC}"
-                    USE_FALLBACK_CONNECTION="true"
-                fi
-            fi
+                --query "[?name=='$name'].id" -o tsv 2>/dev/null || echo "")
         else
-            echo -e "${RED}❌ Failed to create service connection.${NC}"
+            echo -e "${RED}❌ Failed to create service connection '$name'.${NC}"
             echo "Response: $SC_RESPONSE"
-            echo ""
-            echo -e "${YELLOW}Please create the service connection manually:${NC}"
             echo "1. Go to: ${ADO_ORG_URL}/${ADO_PROJECT}/_settings/adminservices"
             echo "2. Click 'New service connection' > 'Azure Resource Manager'"
             echo "3. Select 'Service principal (automatic)'"
-            echo "4. Name it: $SERVICE_CONNECTION_NAME"
+            echo "4. Name it exactly: $name"
             exit 1
         fi
+    fi
+}
+
+# Enforce single canonical connection name
+EXISTING_SC=$(az devops service-endpoint list \
+    --organization "$ADO_ORG_URL" \
+    --project "$ADO_PROJECT" \
+    --query "[?name=='$SERVICE_CONNECTION_NAME'].id" -o tsv 2>/dev/null || echo "")
+OTHER_SC=$(az devops service-endpoint list \
+    --organization "$ADO_ORG_URL" \
+    --project "$ADO_PROJECT" \
+    --query "[?name=='AzureLabConnection'].id" -o tsv 2>/dev/null || echo "")
+
+if [ -n "$EXISTING_SC" ]; then
+    echo -e "${GREEN}✅ Canonical service connection '$SERVICE_CONNECTION_NAME' exists.${NC}"
+    SERVICE_ENDPOINT_ID="$EXISTING_SC"
+else
+    if [ -n "$OTHER_SC" ]; then
+        echo -e "${RED}❌ Found non-standard service connection 'AzureLabConnection' but missing required '$SERVICE_CONNECTION_NAME'.${NC}"
+        echo "Please either:"
+        echo "  a) Rename 'AzureLabConnection' to '$SERVICE_CONNECTION_NAME' in Azure DevOps UI, OR"
+        echo "  b) Delete it and re-run this script, OR"
+        echo "  c) Allow this script to create the correct one now."
+        read -p "Create new '$SERVICE_CONNECTION_NAME'? (Y/n): " ANSWER
+        ANSWER=${ANSWER:-Y}
+        if [[ "$ANSWER" =~ ^[Yy]$ ]]; then
+            create_service_connection "$SERVICE_CONNECTION_NAME"
+        else
+            echo "Aborting until canonical connection is in place."
+            exit 1
+        fi
+    else
+        create_service_connection "$SERVICE_CONNECTION_NAME"
     fi
 fi
 
@@ -326,16 +338,7 @@ else
 fi
 
 # Update pipeline variable if using fallback connection
-if [ "$USE_FALLBACK_CONNECTION" == "true" ] && [ -n "$PIPELINE_ID" ]; then
-    echo "Updating pipeline variable 'ServiceConnectionName' to '$FALLBACK_SC'..."
-    az pipelines variable create \
-        --pipeline-id "$PIPELINE_ID" \
-        --name "ServiceConnectionName" \
-        --value "$FALLBACK_SC" \
-        --organization "$ADO_ORG_URL" \
-        --project "$ADO_PROJECT" >/dev/null 2>&1
-    echo -e "${GREEN}✅ Pipeline variable updated.${NC}"
-fi
+# No fallback logic; pipeline YAML uses 'LabConnection'.
 
 # Summary
 echo ""

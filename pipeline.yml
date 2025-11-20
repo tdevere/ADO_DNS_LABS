@@ -9,8 +9,6 @@ pool:
 variables:
   - name: KeyVaultName
     value: 'kv-dns-lab-c4cbb3dd'  # Key Vault name from terraform output
-  - name: ServiceConnectionName
-    value: 'LabConnection'      # Default service connection name
 
 stages:
 - stage: DNSValidation
@@ -50,12 +48,12 @@ stages:
   - job: AccessSecret
     displayName: 'Retrieve Test Secret'
     steps:
-    # Note: This task requires a Service Connection named '$(ServiceConnectionName)'
-    # If you haven't created it, this step will fail.
+    # Note: This task requires a Service Connection named 'LabConnection'
+    # Script setup-pipeline.sh creates and authorizes it.
     - task: AzureKeyVault@2
       displayName: 'Fetch Secrets from Key Vault'
       inputs:
-        azureSubscription: '$(ServiceConnectionName)'
+        azureSubscription: 'LabConnection'
         KeyVaultName: '$(KeyVaultName)'
         SecretsFilter: 'TestSecret'
         RunAsPreJob: false

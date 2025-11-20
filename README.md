@@ -2,7 +2,7 @@
 
 ## 🎯 Overview
 
-This is a **standalone version** of the Azure DNS troubleshooting lab series (EXE_04, EXE_05, EXE_06) designed to be run independently without requiring the full Azure DevOps setup from EXE_01 and EXE_02.
+This is a **standalone version** of the Azure DNS troubleshooting lab series designed to be run independently.
 
 **What You'll Learn:**
 - Troubleshoot DNS A record misconfigurations
@@ -35,12 +35,15 @@ This is a **standalone version** of the Azure DNS troubleshooting lab series (EX
    - Basic DNS concepts
    - Terraform basics (or willingness to learn)
 
-### Optional (for Full Pipeline Experience)
-
 4. **Azure DevOps Organization**
    - Free organization at https://dev.azure.com
-   - Only needed if you want to test with pipelines
-   - **Alternative:** Use direct VM testing without pipelines (see Path B below)
+   - Required for running the testing pipelines
+   - Run `./scripts/setup-ado-org.sh` then `./scripts/setup-pipeline.sh`
+   - A service connection named **LabConnection** is required (script will create it)
+   - Do NOT commit `.ado.env` (contains your PAT). It is now ignored by `.gitignore`.
+
+### Security Note
+If you accidentally committed a PAT in history, rotate it in Azure DevOps (User Settings > Personal Access Tokens) immediately.
 
 ---
 
@@ -67,7 +70,10 @@ This is a **standalone version** of the Azure DNS troubleshooting lab series (EX
 
 4. **Run the setup:**
    ```bash
-   cd labs/dns-standalone
+   # 1. Configure Azure DevOps (Required)
+   ./scripts/setup-ado-org.sh
+
+   # 2. Setup Lab Environment
    ./setup.sh
    ```
 
@@ -91,62 +97,18 @@ This is a **standalone version** of the Azure DNS troubleshooting lab series (EX
 
 4. **Follow steps 2-4 from Option 1 above**
 
-### Option 3: Local Installation (Traditional)
-
-1. **Install required tools:**
-   - [Terraform](https://www.terraform.io/downloads.html)
-   - [Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli)
-   - SSH client (built-in on Linux/Mac, use Git Bash on Windows)
-
-2. **Clone and authenticate:**
-   ```bash
-   git clone https://github.com/tdevere/ADOLab_Networking.git
-   cd ADOLab_Networking
-   az login
-   az account set --subscription "YOUR_SUBSCRIPTION_ID"
-   ```
-
-3. **Run the setup:**
-   ```bash
-   cd labs/dns-standalone
-   chmod +x setup.sh
-   ./setup.sh
-   ```
-
 ---
 
-## 📖 Lab Paths
+## 📖 Lab Guide
 
-### Path A: Full Experience (with Azure DevOps)
+**Follow the comprehensive guide here:**
+👉 [docs/LAB_GUIDE.md](docs/LAB_GUIDE.md)
 
-**For students who want the complete pipeline testing experience.**
-
-**Additional Setup Required:**
-1. Create Azure DevOps organization (free)
-2. Register self-hosted agents on lab VMs
-3. Create service connections
-4. Run pipelines for testing
-
-**Time:** ~4-5 hours total
-**Complexity:** Intermediate to Advanced
-
-**Follow:** See [docs/PATH_A_WITH_ADO.md](docs/PATH_A_WITH_ADO.md)
-
-### Path B: Simplified (Direct VM Testing) 🌟 Recommended
-
-**For students who want to focus on DNS troubleshooting without Azure DevOps complexity.**
-
-**What's Different:**
-- No Azure DevOps organization needed
-- No agents to register
-- No pipelines to configure
-- Test DNS directly from VMs using SSH
-- All DNS learning objectives still met
-
-**Time:** ~3-4 hours total
-**Complexity:** Intermediate
-
-**Follow:** See [docs/PATH_B_DIRECT.md](docs/PATH_B_DIRECT.md) (Default)
+The guide covers:
+1. Infrastructure Deployment
+2. Agent Registration
+3. Lab Exercises (1-3)
+4. Troubleshooting Steps
 
 ---
 
@@ -156,14 +118,12 @@ This is a **standalone version** of the Azure DNS troubleshooting lab series (EX
 labs/dns-standalone/
 ├── README.md                    # This file
 ├── setup.sh                     # Initial setup script
-├── terraform/                   # Simplified Terraform configs
-│   ├── main.tf
-│   ├── variables.tf
-│   ├── outputs.tf
-│   └── terraform.tfvars.example
+├── main.tf                      # Terraform configuration
+├── variables.tf                 # Terraform variables
+├── outputs.tf                   # Terraform outputs
+├── terraform.tfvars.example     # Example variable values
 ├── docs/
-│   ├── PATH_A_WITH_ADO.md      # Full ADO pipeline path
-│   ├── PATH_B_DIRECT.md        # Simplified direct testing path
+│   ├── LAB_GUIDE.md            # Main lab guide
 │   ├── TROUBLESHOOTING.md      # Common issues and solutions
 │   └── RESOURCES.md            # Manual resource creation guide
 └── scripts/
@@ -188,9 +148,7 @@ labs/dns-standalone/
 
 **Estimated Monthly Cost:** ~$30-50 (varies by region and runtime)
 
-### Manually Created (Optional)
-
-Only for Path A (Full ADO experience):
+### Manually Created
 
 ⚠️ **Azure DevOps Resources:**
 - Organization (one-time, free)
@@ -207,71 +165,23 @@ See [docs/RESOURCES.md](docs/RESOURCES.md) for detailed guidance.
 
 ## 🎓 Learning Modules
 
-### Lab 1: DNS A Record Misconfiguration (EXE_04)
+### Lab 1: DNS A Record Misconfiguration
 **Scenario:** DNS A record points to wrong private IP  
 **Symptoms:** Connection fails despite successful DNS resolution  
 **Fix:** Correct the A record to point to actual private endpoint IP  
 **Duration:** 60-75 minutes
 
-### Lab 2: Missing VNet Links (EXE_05)
+### Lab 2: Missing VNet Links
 **Scenario:** Private DNS zone lacks VNet links  
 **Symptoms:** DNS resolution fails completely (NXDOMAIN)  
 **Fix:** Create virtual network links to Private DNS zone  
 **Duration:** 55-70 minutes
 
-### Lab 3: Custom DNS Configuration (EXE_06)
+### Lab 3: Custom DNS Configuration
 **Scenario:** Custom DNS server forwards to wrong upstream  
 **Symptoms:** Queries return public IP instead of private  
 **Fix:** Configure conditional forwarding to Azure DNS  
 **Duration:** 75-90 minutes
-
----
-
-## 🛠️ Quick Commands Reference
-
-### Setup & Authentication
-```bash
-# Azure login
-az login
-
-# Set subscription
-az account set --subscription "YOUR_SUBSCRIPTION_ID"
-
-# Run setup wizard
-cd labs/dns-standalone && ./setup.sh
-```
-
-### Infrastructure Management
-```bash
-# Deploy infrastructure (from labs/dns-standalone/terraform/)
-terraform init
-terraform plan -out=tfplan
-terraform apply tfplan
-
-# Switch to DNS exercise 1
-terraform apply -var="lab_scenario=dns_exercise1"
-
-# Switch back to base
-terraform apply -var="lab_scenario=base"
-
-# Destroy everything (when done)
-terraform destroy -auto-approve
-```
-
-### Testing
-```bash
-# SSH to test VM
-ssh -i ~/.ssh/terraform_lab_key azureuser@<VM_PUBLIC_IP>
-
-# Test DNS resolution
-nslookup <keyvault-name>.vault.azure.net
-
-# Test with specific DNS server
-nslookup <keyvault-name>.vault.azure.net 168.63.129.16
-
-# Test Key Vault connectivity
-curl -v https://<keyvault-name>.vault.azure.net
-```
 
 ---
 
@@ -286,11 +196,6 @@ curl -v https://<keyvault-name>.vault.azure.net
 - See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for common issues
 - Use the `/dns-troubleshoot` prompt in Copilot Chat for AI assistance
 
-### Original Full Labs
-- This is a simplified standalone version
-- Original full labs with all prerequisites: [labs/EXE_04_DNS_A_RECORD/](../EXE_04_DNS_A_RECORD/)
-- Complete lab series overview: [labs/DNS_LABS_COMPLETE_SUMMARY.md](../DNS_LABS_COMPLETE_SUMMARY.md)
-
 ---
 
 ## ⚠️ Important Notes
@@ -301,15 +206,8 @@ curl -v https://<keyvault-name>.vault.azure.net
 - Always run `terraform destroy` when completely done
 - Set up Azure cost alerts for your subscription
 
-### Security Best Practices
-- This is a **learning lab** - not production-ready
-- Uses password authentication (disabled for production)
-- Public IPs for SSH (use Azure Bastion in production)
-- Permissive NSG rules (restrict in production)
-
 ### Cleanup
 ```bash
-# From labs/dns-standalone/terraform/
 terraform destroy -auto-approve
 
 # Verify everything is deleted
@@ -327,13 +225,3 @@ az group delete --name tf-connect-lab-rg --yes --no-wait
 - **GitHub Issues:** Report bugs or request features
 - **Copilot Chat:** Use `/dns-troubleshoot` for AI assistance
 - **Documentation:** Check docs/ directory for detailed guides
-
----
-
-## 📝 License
-
-This project is licensed under the MIT License. See the repository root for details.
-
----
-
-**Ready to start?** Choose your path (A or B) and dive into the labs! 🚀
