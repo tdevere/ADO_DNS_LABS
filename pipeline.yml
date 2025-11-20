@@ -48,12 +48,12 @@ stages:
   - job: AccessSecret
     displayName: 'Retrieve Test Secret'
     steps:
-    # Note: This task requires a Service Connection named 'AzureLabConnection'
+    # Note: This task requires a Service Connection named 'LabConnection'
     # If you haven't created it, this step will fail.
     - task: AzureKeyVault@2
       displayName: 'Fetch Secrets from Key Vault'
       inputs:
-        azureSubscription: 'AzureLabConnection'
+        azureSubscription: 'LabConnection'
         KeyVaultName: '$(KeyVaultName)'
         SecretsFilter: 'TestSecret'
         RunAsPreJob: false
