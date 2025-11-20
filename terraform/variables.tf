@@ -1,0 +1,1 @@
+../../base_lab/variables.tf

@@ -1,0 +1,1 @@
+../../base_lab/dns-server-init.sh
