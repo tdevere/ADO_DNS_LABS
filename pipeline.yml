@@ -10,7 +10,7 @@ variables:
   - name: KeyVaultName
     value: 'kv-dns-lab-c4cbb3dd'  # Key Vault name from terraform output
   - name: ServiceConnectionName
-    value: 'LabConnection'      # Default service connection name
+    value: 'AzureLabConnection'      # Default service connection name
 
 stages:
 - stage: DNSValidation
