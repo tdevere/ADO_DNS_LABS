@@ -204,6 +204,21 @@ EOF
                 --organization "$ADO_ORG_URL" \
                 --project "$ADO_PROJECT" \
                 --query "[?name=='$SERVICE_CONNECTION_NAME'].id" -o tsv 2>/dev/null || echo "")
+
+            # Fallback: Check for AzureLabConnection if LabConnection is not found
+            if [ -z "$SERVICE_ENDPOINT_ID" ]; then
+                FALLBACK_SC="AzureLabConnection"
+                FALLBACK_ID=$(az devops service-endpoint list \
+                    --organization "$ADO_ORG_URL" \
+                    --project "$ADO_PROJECT" \
+                    --query "[?name=='$FALLBACK_SC'].id" -o tsv 2>/dev/null || echo "")
+                
+                if [ -n "$FALLBACK_ID" ]; then
+                    SERVICE_ENDPOINT_ID="$FALLBACK_ID"
+                    echo -e "${YELLOW}⚠️ Using existing connection '$FALLBACK_SC' instead of '$SERVICE_CONNECTION_NAME'.${NC}"
+                    USE_FALLBACK_CONNECTION="true"
+                fi
+            fi
         else
             echo -e "${RED}❌ Failed to create service connection.${NC}"
             echo "Response: $SC_RESPONSE"
@@ -308,6 +323,18 @@ else
         echo "5. Select 'Existing Azure Pipelines YAML file'"
         echo "6. Path: /pipeline.yml"
     fi
+fi
+
+# Update pipeline variable if using fallback connection
+if [ "$USE_FALLBACK_CONNECTION" == "true" ] && [ -n "$PIPELINE_ID" ]; then
+    echo "Updating pipeline variable 'ServiceConnectionName' to '$FALLBACK_SC'..."
+    az pipelines variable create \
+        --pipeline-id "$PIPELINE_ID" \
+        --name "ServiceConnectionName" \
+        --value "$FALLBACK_SC" \
+        --organization "$ADO_ORG_URL" \
+        --project "$ADO_PROJECT" >/dev/null 2>&1
+    echo -e "${GREEN}✅ Pipeline variable updated.${NC}"
 fi
 
 # Summary
