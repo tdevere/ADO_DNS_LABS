@@ -1,53 +1,115 @@
-# Key Vault Access Test Pipeline
+# Azure DevOps Pipeline - Key Vault DNS Testing
+# Purpose: Test Key Vault connectivity through private endpoint with DNS resolution
+
 trigger: none
 
-parameters:
-- name: targetPool
-  displayName: 'Target Agent Pool'
-  type: string
-  default: 'Default'
-  values:
-  - 'Default'
+pool:
+  name: DNS-Lab-Pool  # Self-hosted agent pool
 
 variables:
-- group: KeyVault-Variables
+  - name: KeyVaultName
+    value: 'kv-dns-lab-c4cbb3dd'  # Key Vault name from terraform output
 
 stages:
-- stage: WriteSecret
-  displayName: 'Write Secret to Key Vault'
-  pool:
-    name: ${{ parameters.targetPool }}
+- stage: DNSValidation
+  displayName: 'DNS Resolution Validation'
   jobs:
-  - job: WriteToKeyVault
-    displayName: 'Store Pipeline Runtime Info'
+  - job: TestDNS
+    displayName: 'Test DNS Resolution'
     steps:
-    - task: AzureCLI@2
-      displayName: 'Write timestamp to Key Vault (Linux)'
-      inputs:
-        azureSubscription: 'LabKeyVaultConnection'
-        scriptType: bash
-        scriptLocation: 'inlineScript'
-        inlineScript: |
-          timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-          agentName="${AGENT_NAME:-unknown}"
-          poolName="${AGENT_POOLNAME:-unknown}"
-          secretValue="Pipeline run at $timestamp by agent $agentName in pool $poolName"
-          
-          echo "Writing secret to Key Vault: $(KeyVaultName)"
-          echo "Secret value: $secretValue"
-          
-          # Write the secret
-          az keyvault secret set --vault-name "$(KeyVaultName)" --name "PipelineRunInfo" --value "$secretValue"
-          
-          echo "✅ Secret written successfully"
+    - bash: |
+        echo "=== DNS Resolution Test ==="
+        echo "Key Vault: $(KeyVaultName).vault.azure.net"
+        echo ""
+        
+        # Test DNS resolution
+        echo "1. Testing DNS resolution with nslookup:"
+        nslookup $(KeyVaultName).vault.azure.net
+        
+        echo ""
+        echo "2. Extracting IP address:"
+        RESOLVED_IP=$(nslookup $(KeyVaultName).vault.azure.net | grep -A1 "Name:" | grep "Address:" | awk '{print $2}' | head -n1)
+        echo "Resolved IP: $RESOLVED_IP"
+        
+        echo ""
+        echo "3. Expected IP range for private endpoint: 10.1.2.0/24"
+        if [[ $RESOLVED_IP == 10.1.2.* ]]; then
+          echo "✓ IP is in correct private endpoint subnet"
+        else
+          echo "✗ WARNING: IP is NOT in expected private endpoint range!"
+          echo "This may indicate DNS misconfiguration"
+        fi
+      displayName: 'DNS Resolution Check'
 
-- stage: ReadSecret
-  displayName: 'Read Secret from Key Vault'
-  dependsOn: WriteSecret
-  pool:
-    name: ${{ parameters.targetPool }}
+- stage: KeyVaultAccess
+  displayName: 'Key Vault Secret Access'
+  dependsOn: DNSValidation
   jobs:
-  - job: ReadFromKeyVault
+  - job: AccessSecret
+    displayName: 'Retrieve Test Secret'
+    steps:
+    # Note: This task requires a Service Connection named 'AzureLabConnection'
+    # If you haven't created it, this step will fail.
+    - task: AzureKeyVault@2
+      displayName: 'Fetch Secrets from Key Vault'
+      inputs:
+        azureSubscription: 'AzureLabConnection'
+        KeyVaultName: '$(KeyVaultName)'
+        SecretsFilter: 'TestSecret'
+        RunAsPreJob: false
+      continueOnError: true
+
+    - bash: |
+        echo "=== Key Vault Access Test ==="
+        
+        if [ -z "$(TestSecret)" ]; then
+          echo "✗ FAILED: Unable to retrieve secret from Key Vault"
+          echo ""
+          echo "Troubleshooting steps:"
+          echo "1. Verify DNS resolution points to private endpoint IP"
+          echo "2. Check VNet peering is configured"
+          echo "3. Verify private DNS zone is linked to agent VNet"
+          echo "4. Check service connection has Key Vault access policy"
+          exit 1
+        else
+          echo "✓ SUCCESS: Secret retrieved from Key Vault"
+          echo "Secret value: $(TestSecret)"
+          echo ""
+          echo "Key Vault connectivity is working correctly!"
+        fi
+      displayName: 'Validate Secret Retrieval'
+
+- stage: NetworkDiagnostics
+  displayName: 'Network Diagnostics'
+  dependsOn: KeyVaultAccess
+  condition: failed()
+  jobs:
+  - job: Diagnostics
+    displayName: 'Run Network Diagnostics'
+    steps:
+    - bash: |
+        echo "=== Network Diagnostics ==="
+        echo ""
+        
+        echo "1. DNS Configuration:"
+        cat /etc/resolv.conf
+        echo ""
+        
+        echo "2. Route Table:"
+        ip route
+        echo ""
+        
+        echo "3. Testing connectivity to private endpoint subnet:"
+        ping -c 3 10.1.2.4 || echo "Ping failed - check VNet peering"
+        echo ""
+        
+        echo "4. DNS Server Resolution:"
+        dig $(KeyVaultName).vault.azure.net
+        echo ""
+        
+        echo "5. Checking Private DNS Zone:"
+        nslookup $(KeyVaultName).privatelink.vaultcore.azure.net
+      displayName: 'Network Troubleshooting'
     displayName: 'Retrieve and Verify Secret'
     steps:
     - task: AzureCLI@2
