@@ -276,16 +276,38 @@ if [ -n "$SERVICE_ENDPOINT_ID" ] && [ "$SERVICE_ENDPOINT_ID" != "null" ]; then
                 --assignee "$SP_ID" \
                 --role "Key Vault Secrets User" \
                 --scope "/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$(az keyvault show --name "$KV_NAME" --query resourceGroup -o tsv)/providers/Microsoft.KeyVault/vaults/$KV_NAME" >/dev/null 2>&1 || echo "Role assignment might already exist."
+            echo -e "${GREEN}✅ Key Vault permissions granted (RBAC).${NC}"
         else
             echo "Key Vault uses Access Policies. Setting policy..."
-            az keyvault set-policy \
-                --name "$KV_NAME" \
-                --spn "$SP_ID" \
-                --secret-permissions get list >/dev/null 2>&1
+            # Retry loop for permission assignment
+            MAX_RETRIES=3
+            RETRY_COUNT=0
+            SUCCESS=false
+
+            while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+                if az keyvault set-policy \
+                    --name "$KV_NAME" \
+                    --spn "$SP_ID" \
+                    --secret-permissions get list >/dev/null 2>&1; then
+                    echo -e "${GREEN}✅ Key Vault permissions granted.${NC}"
+                    SUCCESS=true
+                    break
+                else
+                    echo -e "${YELLOW}Attempt $((RETRY_COUNT+1)) failed. Retrying in 5 seconds...${NC}"
+                    sleep 5
+                    RETRY_COUNT=$((RETRY_COUNT+1))
+                fi
+            done
+
+            if [ "$SUCCESS" = false ]; then
+                echo -e "${RED}❌ Failed to grant Key Vault permissions automatically after $MAX_RETRIES attempts.${NC}"
+                echo -e "${YELLOW}⚠️  CRITICAL: You must run this command manually to fix the pipeline:${NC}"
+                echo -e "${BLUE}az keyvault set-policy --name $KV_NAME --spn $SP_ID --secret-permissions get list${NC}"
+            fi
         fi
-        echo -e "${GREEN}✅ Key Vault permissions granted.${NC}"
     else
-        echo -e "${YELLOW}⚠️ Could not retrieve Service Principal ID. Please manually grant Key Vault access.${NC}"
+        echo -e "${RED}❌ Could not retrieve Service Principal ID from Service Connection.${NC}"
+        echo "Please manually grant Key Vault access to the Service Principal used by the 'LabConnection' service connection."
     fi
 fi
 

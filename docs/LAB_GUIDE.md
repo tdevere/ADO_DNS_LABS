@@ -154,8 +154,8 @@ Once your environment is set up and verified, proceed to the individual lab work
 | Lab | Description | Estimated Time |
 | :--- | :--- | :--- |
 | **[Lab 1: Connectivity Failure](../labs/lab1/README.md)** | Diagnose why the pipeline cannot reach Key Vault. | 60 min |
-| **[Lab 2: Missing VNet Link](../labs/lab2/README.md)** | Fix "Split-Horizon" DNS issues where private zones are unreachable. | 45 min |
-| **[Lab 3: Custom DNS Misconfiguration](../labs/lab3/README.md)** | Troubleshoot custom DNS forwarders and conditional forwarding. | 60 min |
+<!-- | **[Lab 2: Missing VNet Link](../labs/lab2/README.md)** | Fix "Split-Horizon" DNS issues where private zones are unreachable. | 45 min | -->
+<!-- | **[Lab 3: Custom DNS Misconfiguration](../labs/lab3/README.md)** | Troubleshoot custom DNS forwarders and conditional forwarding. | 60 min | -->
 
 ---
 
