@@ -31,3 +31,23 @@ output "sp_client_secret" {
   value     = azuread_service_principal_password.lab_sp_password.value
   sensitive = true
 }
+
+output "sp_tenant_id" {
+  value = data.azurerm_client_config.current.tenant_id
+}
+
+output "vnet_name" {
+  value = azurerm_virtual_network.vnet.name
+}
+
+output "private_dns_zone_name" {
+  value = azurerm_private_dns_zone.dns.name
+}
+
+output "key_vault_private_ip" {
+  value = azurerm_private_endpoint.pe.private_service_connection[0].private_ip_address
+}
+
+output "vnet_link_name" {
+  value = try(azurerm_private_dns_zone_virtual_network_link.link[0].name, "")
+}

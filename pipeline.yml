@@ -52,6 +52,7 @@ stages:
     # Script setup-pipeline.sh creates and authorizes it.
     - task: AzureKeyVault@2
       displayName: 'Fetch Secrets from Key Vault'
+      timeoutInMinutes: 2  # Limit secret fetch to fail fast for lab scenario
       inputs:
         azureSubscription: 'LabConnection'
         KeyVaultName: '$(KeyVaultName)'

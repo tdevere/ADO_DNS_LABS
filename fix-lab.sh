@@ -12,8 +12,8 @@ echo "=================================================="
 echo "   DNS Troubleshooting Lab - Fix Scenario: $LAB_ID"
 echo "=================================================="
 
-echo "Restoring Correct Configuration..."
+echo "Restoring configuration using Infrastructure as Code..."
 terraform apply -auto-approve -var="lab_scenario=base"
 
-echo "✅ Lab is now FIXED. Configuration restored to base state."
+echo "✅ Lab $LAB_ID is now FIXED. Configuration restored to base state."
 echo "   Run the pipeline or check 'nslookup' to verify success."
