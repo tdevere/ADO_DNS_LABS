@@ -1,23 +1,23 @@
-# Lab 2: Missing VNet Link Misconfiguration
+# Lab 2: Private Endpoint Connectivity
 
 ## 🎯 Overview
 
-This exercise simulates a common but confusing DNS issue where the Private DNS Zone exists and contains the correct records, but the client Virtual Network (VNet) is not linked to the zone. This results in "Split-Horizon" DNS behavior where the client resolves the public IP address instead of the private endpoint IP.
+This exercise simulates a network connectivity failure where private endpoint access becomes unreliable. Your deployment pipeline intermittently fails to reach Azure Key Vault, despite infrastructure appearing properly configured. You'll need to investigate DNS resolution, network paths, and access policies to identify the root cause.
 
 ## 🌍 Real-World Scenario
 
-**Tuesday, 10:00 AM:** A developer reports that the deployment pipeline is behaving strangely. Sometimes it connects to Key Vault successfully, sometimes it times out. When you check the logs, you notice the agent is resolving the Key Vault to a **public IP address** instead of the private endpoint IP.
+**Tuesday, 10:00 AM:** Your deployment pipeline suddenly fails with timeout errors accessing Azure Key Vault. The infrastructure team confirms "nothing changed" overnight. Private DNS zones exist, the private endpoint shows healthy status in the portal, and the agent VM can ping other resources without issue.
 
-**What you know:**
-- The Private DNS Zone exists and has the correct A record
-- The Private Endpoint is deployed and healthy
-- DNS resolution "works" (returns an IP, no errors)
-- The pipeline worked yesterday
+**What you observe:**
+- Pipeline fails to retrieve secrets from Key Vault
+- No obvious errors in Azure Portal
+- Private endpoint resource shows "Succeeded" state
+- DNS infrastructure appears intact
 
-**What you don't know:**
-- Last night, the infrastructure team deployed a new VNet for another project
-- They used a script that accidentally deleted and recreated the Private DNS Zone
-- The zone was recreated but the VNet links were not restored
+**Your task:**
+- Investigate why private endpoint connectivity is broken
+- Use DNS and network diagnostic tools to narrow scope
+- Identify which layer(s) of the network stack are failing
 - No one documented the change
 
 **Your mission:** Figure out why DNS is returning the public IP and restore private connectivity.

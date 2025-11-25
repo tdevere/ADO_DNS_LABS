@@ -26,7 +26,7 @@ echo "Restoring configuration using Infrastructure as Code..."
 
 # For Lab 2, re-enable Key Vault public access first so Terraform can connect
 if [ "$LAB_ID" == "lab2" ]; then
-    echo "🔓 Re-enabling Key Vault public access for Lab 2..."
+    echo "🔓 Restoring network connectivity for Lab 2..."
     KV_NAME=$(terraform output -raw key_vault_name 2>/dev/null || echo "")
     if [ -n "$KV_NAME" ]; then
         az keyvault update --name "$KV_NAME" --public-network-access Enabled || true
