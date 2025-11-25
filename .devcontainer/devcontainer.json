@@ -16,8 +16,13 @@
       "extensions": [
         "ms-azuretools.vscode-azureterraform",
         "hashicorp.terraform",
-        "ms-vscode.azurecli"
-      ]
+        "ms-vscode.azurecli",
+        "bierner.markdown-mermaid",
+        "shd101wyy.markdown-preview-enhanced"
+      ],
+      "settings": {
+        "markdown.preview.openMarkdownLinks": "inPreview"
+      }
     }
   },
   "postCreateCommand": "sudo apt-get update && sudo apt-get install -y dnsutils iputils-ping jq git-lfs"
