@@ -51,3 +51,8 @@ output "key_vault_private_ip" {
 output "vnet_link_name" {
   value = try(azurerm_private_dns_zone_virtual_network_link.link[0].name, "")
 }
+
+output "vm_name" {
+  value = azurerm_linux_virtual_machine.vm.name
+  description = "Name of the agent virtual machine"
+}

@@ -101,20 +101,37 @@ chmod 644 "$SSH_PUB_KEY_PATH" 2>/dev/null || true
 # Test SSH connectivity before attempting agent registration
 echo -e "${BLUE}Testing SSH connectivity to $VM_IP...${NC}"
 if ! ssh -o StrictHostKeyChecking=no -o ConnectTimeout=12 -o BatchMode=yes -i "$SSH_KEY_PATH" "azureuser@$VM_IP" "echo 'SSH OK'" 2>/dev/null; then
-    echo -e "${YELLOW}⚠️  Direct SSH failed. Injecting public key via run-command as fallback...${NC}"
-    INJECT_SCRIPT="echo '$LOCAL_PUB_KEY' >> /home/azureuser/.ssh/authorized_keys && chmod 600 /home/azureuser/.ssh/authorized_keys"
-    if az vm run-command invoke --command-id RunShellScript --name "$(terraform output -raw vm_name 2>/dev/null || echo dns-lab-vm)" --resource-group "$(terraform output -raw resource_group_name 2>/dev/null)" --scripts "$INJECT_SCRIPT" >/dev/null 2>&1; then
-        sleep 5
+    echo -e "${YELLOW}⚠️  Direct SSH failed. Attempting automated recovery...${NC}"
+    RG_NAME="$(terraform output -raw resource_group_name 2>/dev/null || echo '')"
+    VM_NAME="$(terraform output -raw vm_name 2>/dev/null || echo '')"
+    if [ -z "$VM_NAME" ]; then
+        # Fallback: discover VM by public IP
+        VM_NAME=$(az vm list -d --query "[?publicIps=='$VM_IP'].name | [0]" -o tsv 2>/dev/null || echo "")
+    fi
+    if [ -z "$RG_NAME" ] || [ -z "$VM_NAME" ]; then
+        echo -e "${RED}❌ Unable to determine VM name/resource group for key injection${NC}"
+        echo " RG: '$RG_NAME'  VM: '$VM_NAME'"
+        echo "Run: terraform output resource_group_name && terraform output vm_name"
+        exit 1
+    fi
+    echo -e "${BLUE}Using VM '$VM_NAME' in resource group '$RG_NAME' for key injection${NC}"
+    INJECT_SCRIPT="set -e; mkdir -p /home/azureuser/.ssh; touch /home/azureuser/.ssh/authorized_keys; grep -q '${LOCAL_PUB_KEY}' /home/azureuser/.ssh/authorized_keys || echo '${LOCAL_PUB_KEY}' >> /home/azureuser/.ssh/authorized_keys; chmod 700 /home/azureuser/.ssh; chmod 600 /home/azureuser/.ssh/authorized_keys"
+    if az vm run-command invoke --command-id RunShellScript --name "$VM_NAME" --resource-group "$RG_NAME" --scripts "$INJECT_SCRIPT" >/dev/null 2>&1; then
+        sleep 6
         if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=12 -o BatchMode=yes -i "$SSH_KEY_PATH" "azureuser@$VM_IP" "echo 'SSH OK'" 2>/dev/null; then
-            echo -e "${GREEN}✓ SSH connectivity restored via key injection${NC}"
+            echo -e "${GREEN}✓ SSH connectivity restored via run-command injection${NC}"
         else
-            echo -e "${RED}❌ SSH still failing after key injection${NC}"
-            echo "Manual intervention required. Consider destroying and re-running ./setup.sh"
+            echo -e "${RED}❌ SSH still failing after injection${NC}"
+            echo "Diagnostics:"
+            echo "  az vm get-instance-view -n $VM_NAME -g $RG_NAME --query instanceView.statuses"
+            echo "  az network nsg show -g $RG_NAME -n ${VM_NAME}-nsg"
+            echo "Consider full rebuild: terraform apply -replace=azurerm_linux_virtual_machine.vm"
             exit 1
         fi
     else
-        echo -e "${RED}❌ Failed to inject SSH key using run-command${NC}"
-        echo "Verify VM name and resource group, then retry."
+        echo -e "${RED}❌ Failed run-command key injection${NC}"
+        echo "Check az login and permissions: az account show"
+        echo "Manual fix: 'az vm run-command invoke' with a simple echo of the key."
         exit 1
     fi
 else
