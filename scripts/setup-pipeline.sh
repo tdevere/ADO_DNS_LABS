@@ -34,6 +34,13 @@ if ! az extension show --name azure-devops >/dev/null 2>&1; then
     az extension add --name azure-devops
 fi
 
+# Verify Azure DevOps project exists early
+if ! az devops project show --project "$ADO_PROJECT" --organization "$ADO_ORG_URL" >/dev/null 2>&1; then
+    echo -e "${RED}❌ Azure DevOps project '$ADO_PROJECT' not found in '$ADO_ORG_URL'.${NC}"
+    echo -e "${YELLOW}Run ./scripts/setup-ado-org.sh to create and configure the organization/project.${NC}"
+    exit 1
+fi
+
 # 2. Get Azure subscription details
 echo -e "${BLUE}1️⃣  Fetching Azure Subscription Details${NC}"
 SUBSCRIPTION_ID=$(az account show --query id -o tsv)
@@ -57,11 +64,15 @@ fi
 
 echo -e "${GREEN}✅ Key Vault: $KV_NAME${NC}"
 
-# 4. Update pipeline.yml with Key Vault name
+# 4. Update pipeline.yml with Key Vault name (only if placeholder present)
 echo -e "\n${BLUE}3️⃣  Updating pipeline.yml${NC}"
 if [ -f "pipeline.yml" ]; then
-    sed -i "s/REPLACE_ME_WITH_KV_NAME/$KV_NAME/g" pipeline.yml
-    echo -e "${GREEN}✅ pipeline.yml updated with Key Vault name.${NC}"
+    if grep -q 'REPLACE_ME_WITH_KV_NAME' pipeline.yml; then
+        sed -i "s/REPLACE_ME_WITH_KV_NAME/$KV_NAME/g" pipeline.yml
+        echo -e "${GREEN}✅ Inserted Key Vault name into pipeline.yml.${NC}"
+    else
+        echo -e "${YELLOW}⏭️  pipeline.yml already configured (no placeholder found).${NC}"
+    fi
 else
     echo -e "${RED}❌ pipeline.yml not found.${NC}"
     exit 1
@@ -102,27 +113,31 @@ fi
 # Configure Azure Repos remote with PAT authentication
 REMOTE_URL="https://:${ADO_PAT}@${ADO_ORG_URL#https://}/${ADO_PROJECT}/_git/${REPO_NAME}"
 
-# Remove existing origin if it exists
-git remote remove origin 2>/dev/null || true
+# Determine if origin needs update
+CURRENT_ORIGIN_URL=$(git remote get-url origin 2>/dev/null || echo '')
+if [ -z "$CURRENT_ORIGIN_URL" ]; then
+    echo "Adding Azure Repos remote 'origin'..."
+    git remote add origin "$REMOTE_URL"
+elif [ "$CURRENT_ORIGIN_URL" != "$REMOTE_URL" ]; then
+    echo -e "${YELLOW}⚠️  Existing origin remote differs. Replacing with Azure Repos remote.${NC}"
+    git remote remove origin
+    git remote add origin "$REMOTE_URL"
+else
+    echo -e "${GREEN}✅ Origin remote already points to Azure Repos.${NC}"
+fi
 
-# Add Azure Repos remote
-git remote add origin "$REMOTE_URL"
-
-# Disable Git LFS hooks temporarily (not needed for this lab)
+# Disable Git LFS hooks temporarily (not needed for this lab) only if pushing
+echo "Pushing to Azure Repos (all branches)..."
 git config --local core.hookspath /dev/null
-
-# Push to Azure Repos
-echo "Pushing to Azure Repos..."
 if git push -u origin --all 2>&1; then
     echo -e "${GREEN}✅ Code pushed successfully.${NC}"
 else
     echo -e "${RED}❌ Push failed.${NC}"
-    echo "Try pushing manually: git push -u origin --all"
+    echo "Try manually: git push -u origin --all"
+    git config --unset core.hookspath || true
     exit 1
 fi
-
-# Re-enable hooks
-git config --unset core.hookspath
+git config --unset core.hookspath || true
 
 # 7. Create Service Connection
 echo -e "\n${BLUE}6️⃣  Creating Service Connection${NC}"
@@ -322,8 +337,15 @@ EXISTING_PIPELINE=$(az pipelines list \
     --query "[?name=='$PIPELINE_NAME'].id" -o tsv 2>/dev/null || echo "")
 
 if [ -n "$EXISTING_PIPELINE" ]; then
-    echo -e "${YELLOW}⚠️  Pipeline '$PIPELINE_NAME' already exists.${NC}"
+    echo -e "${YELLOW}⚠️  Pipeline '$PIPELINE_NAME' already exists (ID: $EXISTING_PIPELINE).${NC}"
     PIPELINE_ID="$EXISTING_PIPELINE"
+    # Optional: queue a run to surface agent availability issues early
+    echo -e "${BLUE}🔄 Queuing a pipeline run to verify agent availability...${NC}"
+    if az pipelines run --id "$PIPELINE_ID" --organization "$ADO_ORG_URL" --project "$ADO_PROJECT" >/dev/null 2>&1; then
+        echo -e "${GREEN}✅ Pipeline run queued.${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Unable to auto-queue run (permissions or agent missing). You can trigger manually in the UI.${NC}"
+    fi
 else
     echo -e "${YELLOW}Creating pipeline '$PIPELINE_NAME'...${NC}"
     
@@ -371,6 +393,13 @@ echo ""
 echo -e "${GREEN}✅ Service Connection: $SERVICE_CONNECTION_NAME${NC}"
 echo -e "${GREEN}✅ Repository: $REPO_NAME${NC}"
 echo -e "${GREEN}✅ Pipeline: $PIPELINE_NAME${NC}"
+echo ""
+echo "Agent Pool Check (DNS-Lab-Pool):"
+if az pipelines agent list --pool-name DNS-Lab-Pool --organization "$ADO_ORG_URL" --project "$ADO_PROJECT" --query '[].name' -o tsv 2>/dev/null | grep -q '.'; then
+    echo -e "${GREEN}  ✓ Agent(s) registered in pool 'DNS-Lab-Pool'.${NC}"
+else
+    echo -e "${YELLOW}  ⚠️ No agents detected in 'DNS-Lab-Pool'. Run ./scripts/register-agent.sh before executing the pipeline.${NC}"
+fi
 echo -e "${GREEN}✅ Key Vault: $KV_NAME${NC}"
 echo ""
 echo "Next Steps:"
