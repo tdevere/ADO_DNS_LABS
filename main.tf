@@ -107,6 +107,18 @@ resource "azurerm_key_vault" "kv" {
       "Get", "List", "Set", "Delete", "Recover", "Backup", "Restore", "Purge"
     ]
   }
+
+  # Azure DevOps Service Connection principal (provided via variable) for pipeline secret retrieval
+  dynamic "access_policy" {
+    for_each = var.azure_devops_sp_object_id != "" ? [var.azure_devops_sp_object_id] : []
+    content {
+      tenant_id = data.azurerm_client_config.current.tenant_id
+      object_id = access_policy.value
+      secret_permissions = [
+        "Get", "List"
+      ]
+    }
+  }
 }
 
 resource "azurerm_key_vault_secret" "secret" {

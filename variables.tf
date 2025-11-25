@@ -54,4 +54,10 @@ variable "lab_scenario" {
   default     = "base"
 }
 
+variable "azure_devops_sp_object_id" {
+  description = "Object ID of the Azure DevOps Service Connection service principal requiring Key Vault secret access"
+  type        = string
+  default     = ""
+}
+
 
