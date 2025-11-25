@@ -37,6 +37,5 @@ terraform.rc
 terraform_lab_key
 terraform_lab_key.pub
 
-# Hide Lab 2 and 3 for now
-labs/lab2/
+# Hide Lab 3 for now
 labs/lab3/

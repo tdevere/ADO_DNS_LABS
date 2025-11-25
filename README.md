@@ -52,7 +52,7 @@ Once setup is complete, proceed to the first scenario:
 | Module | Description |
 | :--- | :--- |
 | **[DNS LAB 1: Connectivity Failure](labs/lab1/README.md)** | Diagnose why the pipeline cannot reach Key Vault despite successful DNS resolution. |
-<!-- | **[Lab 2: Missing VNet Link](labs/lab2/README.md)** | Fix "Split-Horizon" DNS issues where private zones are unreachable. | -->
+| **[Lab 2: Missing VNet Link](labs/lab2/README.md)** | Fix "Split-Horizon" DNS issues where private zones are unreachable. |
 <!-- | **[Lab 3: Custom DNS Misconfiguration](labs/lab3/README.md)** | Troubleshoot custom DNS forwarders and conditional forwarding. | -->
 
 ---
