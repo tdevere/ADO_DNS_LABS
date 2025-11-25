@@ -88,7 +88,7 @@ resource "azurerm_key_vault" "kv" {
   sku_name                    = "standard"
   soft_delete_retention_days  = 7
   purge_protection_enabled    = false
-  public_network_access_enabled = false # Private endpoint only; ensures Lab 2 breaks visibly when VNet link removed
+  public_network_access_enabled = true # Baseline allows Terraform to seed secrets; Lab 2 break script disables this
 
   access_policy {
     tenant_id = data.azurerm_client_config.current.tenant_id

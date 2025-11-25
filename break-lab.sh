@@ -73,9 +73,10 @@ case $LAB_ID in
         echo "✅ Lab 1 fault injected. Begin troubleshooting."
         ;;
     lab2)
-        echo "Injecting Lab 2 fault (remove VNet link)..."
+        echo "Injecting Lab 2 fault (remove VNet link + disable public access)..."
         silent az network private-dns link vnet delete \
             --resource-group "$RG_NAME" --zone-name "$ZONE_NAME" --name "$VNET_LINK_NAME" --yes || true
+        silent az keyvault update --name "$KV_NAME" --public-network-access Disabled
         echo "✅ Lab 2 fault injected."
         echo ""
         echo "Next: Run the pipeline to reproduce the failure."
