@@ -395,10 +395,27 @@ echo -e "${GREEN}✅ Repository: $REPO_NAME${NC}"
 echo -e "${GREEN}✅ Pipeline: $PIPELINE_NAME${NC}"
 echo ""
 echo "Agent Pool Check (DNS-Lab-Pool):"
-if az pipelines agent list --pool-name DNS-Lab-Pool --organization "$ADO_ORG_URL" --project "$ADO_PROJECT" --query '[].name' -o tsv 2>/dev/null | grep -q '.'; then
-    echo -e "${GREEN}  ✓ Agent(s) registered in pool 'DNS-Lab-Pool'.${NC}"
+
+# Resolve pool ID first (CLI requires pool-id for agent listing)
+POOL_ID=$(az pipelines pool list --organization "$ADO_ORG_URL" --query "[?name=='DNS-Lab-Pool'].id" -o tsv 2>/dev/null || echo '')
+if [ -z "$POOL_ID" ]; then
+    echo -e "${YELLOW}  ⚠️ Pool 'DNS-Lab-Pool' not found. It will be created automatically when an agent registers.${NC}"
+    echo -e "${YELLOW}  Next: run ./scripts/register-agent.sh to create and attach agent.${NC}"
 else
-    echo -e "${YELLOW}  ⚠️ No agents detected in 'DNS-Lab-Pool'. Run ./scripts/register-agent.sh before executing the pipeline.${NC}"
+    AGENT_NAMES=$(az pipelines agent list --organization "$ADO_ORG_URL" --pool-id "$POOL_ID" --query '[].name' -o tsv 2>/dev/null || echo '')
+    if [ -n "$AGENT_NAMES" ]; then
+        echo -e "${GREEN}  ✓ Agent(s) registered: ${AGENT_NAMES}${NC}"
+    else
+        # Fallback: REST API query for agents (sometimes CLI misses newly registered agents due to caching)
+        REST_AGENTS=$(curl -s -u :"$ADO_PAT" "${ADO_ORG_URL}/${ADO_PROJECT}/_apis/distributedtask/pools/$POOL_ID/agents?api-version=7.1-preview.1" | jq -r '.value[].name' 2>/dev/null || echo '')
+        if [ -n "$REST_AGENTS" ]; then
+            echo -e "${GREEN}  ✓ Agent(s) registered (REST): ${REST_AGENTS}${NC}"
+        else
+            echo -e "${YELLOW}  ⚠️ No agents detected yet in pool (ID: $POOL_ID).${NC}"
+            echo "      If you just ran register-agent, wait ~30s and re-run this check:"
+            echo "      az pipelines agent list --organization '$ADO_ORG_URL' --pool-id $POOL_ID --query '[].name' -o tsv"
+        fi
+    fi
 fi
 echo -e "${GREEN}✅ Key Vault: $KV_NAME${NC}"
 echo ""
