@@ -8,7 +8,9 @@ pool:
 
 variables:
   - name: KeyVaultName
-    value: 'kv-dns-lab-c4cbb3dd'  # Key Vault name from terraform output
+    value: 'kv-dns-lab-16395fa5'  # Placeholder replaced by setup-pipeline.sh
+  - name: Hint_KeyVaultMismatch
+    value: 'If AzureKeyVault@2 times out or shows NXDOMAIN, confirm KeyVaultName matches terraform output: terraform output -raw key_vault_name and re-run ./scripts/setup-pipeline.sh'
 
 stages:
 - stage: DNSValidation
@@ -71,6 +73,7 @@ stages:
           echo "2. Check VNet peering is configured"
           echo "3. Verify private DNS zone is linked to agent VNet"
           echo "4. Check service connection has Key Vault access policy"
+          echo "5. $(Hint_KeyVaultMismatch)"
           exit 1
         else
           echo "✓ SUCCESS: Secret retrieved from Key Vault"
