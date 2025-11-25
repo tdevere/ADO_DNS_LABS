@@ -27,7 +27,7 @@ This exercise simulates a common but confusing DNS issue where the Private DNS Z
 
 ## 🏗️ Lab Architecture
 
-Below: current (broken) flow vs expected (healthy). The only difference is the presence of a VNet link allowing the resolver to consult the Private DNS Zone.
+High-level resolution path (observe behavior first; do not assume cause). Compare the two flows and note what differs in answers returned.
 
 ```mermaid
 flowchart TB
@@ -58,10 +58,10 @@ flowchart TB
       PE:::good
 ```
 
-Key points:
-- Azure resolver only evaluates Private DNS Zones that are linked to the querying VNet.
-- Absence of the link causes fallback to public DNS, yielding a public IP.
-- The zone and record can be perfectly correct yet invisible to the VNet without the link.
+Reflection prompts:
+- Which hop produces the answer actually returned to the agent?
+- Which component appears unused in the broken path?
+- What additional evidence would confirm why the public IP is chosen?
 
 ---
 
