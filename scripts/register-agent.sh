@@ -57,55 +57,62 @@ fi
 
 SSH_KEY_PATH="$HOME/.ssh/terraform_lab_key"
 if [ ! -f "$SSH_KEY_PATH" ]; then
-    echo -e "${RED}❌ ERROR: SSH key not found at $SSH_KEY_PATH${NC}"
-    echo -e "${YELLOW}The SSH key may not have been generated or the VM was recreated with a different key.${NC}"
-    echo ""
-    echo "To fix this issue:"
-    echo "1. Check if the key exists in Terraform state:"
-    echo "   terraform output -raw ssh_private_key"
-    echo ""
-    echo "2. If the VM was recreated, regenerate the SSH key:"
-    echo "   ./scripts/generate-ssh-key.sh"
-    echo "   # Update terraform.tfvars with the new public key"
-    echo "   terraform apply -auto-approve"
-    echo ""
-    echo "3. Or manually copy the private key from terraform.tfstate:"
-    echo "   terraform output -raw ssh_private_key > $SSH_KEY_PATH"
-    echo "   chmod 600 $SSH_KEY_PATH"
-    exit 1
+    echo -e "${YELLOW}⚠️  SSH key not found at $SSH_KEY_PATH${NC}"
+    echo "Attempting to extract SSH key from Terraform state..."
+    
+    if ! terraform output -raw ssh_private_key > "$SSH_KEY_PATH" 2>/dev/null; then
+        echo -e "${RED}❌ ERROR: Could not retrieve SSH key from Terraform state${NC}"
+        echo "This usually means the infrastructure hasn't been deployed yet."
+        echo ""
+        echo "Run: ./setup.sh"
+        exit 1
+    fi
+    
+    chmod 600 "$SSH_KEY_PATH"
+    echo -e "${GREEN}✓ SSH key extracted from Terraform state${NC}"
 fi
 
 # Validate SSH key permissions
 if [ "$(stat -c %a "$SSH_KEY_PATH" 2>/dev/null || stat -f %A "$SSH_KEY_PATH" 2>/dev/null)" != "600" ]; then
-    echo -e "${YELLOW}⚠️  Warning: SSH key has incorrect permissions. Fixing...${NC}"
+    echo -e "${YELLOW}⚠️  SSH key has incorrect permissions. Fixing...${NC}"
     chmod 600 "$SSH_KEY_PATH"
 fi
 
 # Test SSH connectivity before attempting agent registration
 echo -e "${BLUE}Testing SSH connectivity to $VM_IP...${NC}"
 if ! ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes -i "$SSH_KEY_PATH" "azureuser@$VM_IP" "echo 'SSH OK'" 2>/dev/null; then
-    echo -e "${RED}❌ ERROR: Cannot connect to VM via SSH${NC}"
-    echo -e "${YELLOW}This usually means:${NC}"
-    echo "  1. The SSH public key in terraform.tfvars doesn't match the private key at $SSH_KEY_PATH"
-    echo "  2. The VM was recreated but the SSH key wasn't updated"
-    echo "  3. The VM's public IP changed"
-    echo ""
-    echo "Diagnostic steps:"
-    echo "1. Verify the VM is running:"
-    echo "   az vm show --resource-group <rg> --name <vm-name> --query 'provisioningState'"
-    echo ""
-    echo "2. Check the current public IP:"
-    echo "   terraform output -raw vm_public_ip"
-    echo ""
-    echo "3. Verify SSH key fingerprint matches:"
-    echo "   ssh-keygen -lf $SSH_KEY_PATH"
-    echo "   az vm show --resource-group <rg> --name <vm-name> --query 'osProfile.linuxConfiguration.ssh.publicKeys[0].keyData' -o tsv | ssh-keygen -lf -"
-    echo ""
-    echo "4. If keys don't match, regenerate and redeploy:"
-    echo "   ./scripts/generate-ssh-key.sh"
-    echo "   # Update terraform.tfvars with new public key"
-    echo "   terraform apply -auto-approve"
-    exit 1
+    echo -e "${YELLOW}⚠️  Cannot connect with current SSH key${NC}"
+    echo "Attempting to refresh SSH key from Terraform state..."
+    
+    # Try to get fresh key from Terraform
+    if terraform output -raw ssh_private_key > "$SSH_KEY_PATH.new" 2>/dev/null; then
+        chmod 600 "$SSH_KEY_PATH.new"
+        
+        # Test with the new key
+        if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes -i "$SSH_KEY_PATH.new" "azureuser@$VM_IP" "echo 'SSH OK'" 2>/dev/null; then
+            mv "$SSH_KEY_PATH.new" "$SSH_KEY_PATH"
+            echo -e "${GREEN}✓ SSH key refreshed successfully${NC}"
+        else
+            rm -f "$SSH_KEY_PATH.new"
+            echo -e "${RED}❌ ERROR: Cannot connect to VM via SSH${NC}"
+            echo ""
+            echo "The SSH key in Terraform state doesn't match the VM's authorized key."
+            echo "This happens when the VM was recreated manually or the key was changed."
+            echo ""
+            echo "To fix:"
+            echo "1. Regenerate the SSH key and update the VM:"
+            echo "   ./scripts/generate-ssh-key.sh"
+            echo "   terraform apply -auto-approve"
+            echo ""
+            echo "2. Then retry agent registration:"
+            echo "   ./scripts/register-agent.sh"
+            exit 1
+        fi
+    else
+        echo -e "${RED}❌ ERROR: Cannot retrieve SSH key from Terraform${NC}"
+        echo "Please ensure infrastructure is deployed: ./setup.sh"
+        exit 1
+    fi
 fi
 
 echo -e "${GREEN}✓ SSH connectivity verified${NC}"
