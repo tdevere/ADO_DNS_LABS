@@ -76,14 +76,14 @@ ssh -i ~/.ssh/terraform_lab_key azureuser@"$VM_IP" "curl -sv https://${KV_NAME}.
 
 ## 🧪 Modules
 
-| Module |
-|--------|
-| [Connectivity Failure](labs/lab1/README.md) |
-| [Missing VNet Link](labs/lab2/README.md) |
+| Module | Description |
+|--------|-------------|
+| [Access Reliability Scenario](labs/lab1/README.md) | Pipeline secret retrieval shows inconsistent behavior; investigate layers (agent, network, name resolution). |
+| [Endpoint Resolution Variability](labs/lab2/README.md) | Private endpoint access appears inconsistent; observe DNS answers and narrow scope without assuming cause. |
 
 Start any module after base validation, e.g.:
 ```bash
-cd labs/lab2   # Missing VNet Link (module 2)
+cd labs/lab2   # Endpoint Resolution Variability
 cat README.md
 ```
 
