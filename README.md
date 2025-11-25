@@ -2,214 +2,65 @@
 
 ## 🎯 Overview
 
-This is a **standalone version** of the Azure DNS troubleshooting lab series designed to be run independently.
+This lab simulates real-world Azure networking scenarios. You will play the role of a **Support Engineer** troubleshooting pipeline failures caused by infrastructure drift and DNS misconfigurations.
 
 **What You'll Learn:**
 - Troubleshoot DNS A record misconfigurations
 - Diagnose missing Private DNS zone VNet links
-- Configure custom DNS servers with conditional forwarding
 - Understand Azure Private Endpoint DNS architecture
 
-**Time Estimate:** 3-4 hours for all three labs
+**Time Estimate:** 1-2 hours
 
 ---
 
 ## 📋 Prerequisites
 
-### Required
-
-1. **Azure Subscription**
-   - Active Azure subscription with Contributor role
-   - Recommended: Use a dedicated subscription or resource group for lab isolation
-   - Estimated cost: $5-10 per day (remember to clean up resources when done)
-
-2. **Tools** (Auto-installed in GitHub Codespaces/devcontainer)
-   - Terraform >= 1.4.0
-   - Azure CLI
-   - SSH client
-   - DNS utilities (nslookup, dig)
-
-3. **Knowledge Prerequisites**
-   - Basic understanding of Azure networking concepts
-   - Familiarity with VNets, subnets, and private endpoints
-   - Basic DNS concepts
-   - Terraform basics (or willingness to learn)
-
-4. **Azure DevOps Organization**
-   - Free organization at https://dev.azure.com
-   - Required for running the testing pipelines
-   - Run `./scripts/setup-ado-org.sh` then `./scripts/setup-pipeline.sh`
-   - A service connection named **LabConnection** is required (script will create it)
-   - Do NOT commit `.ado.env` (contains your PAT). It is now ignored by `.gitignore`.
-
-### Security Note
-If you accidentally committed a PAT in history, rotate it in Azure DevOps (User Settings > Personal Access Tokens) immediately.
+1. **Azure Subscription** (Contributor role required)
+2. **Azure DevOps Organization** (Free at https://dev.azure.com)
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Getting Started (Codespaces)
 
-### Option 1: GitHub Codespaces (Recommended - No Local Setup)
+This lab is designed to run in **GitHub Codespaces**. No local setup is required.
 
-1. **Open in Codespaces:**
-   - Click the "Code" button on GitHub
-   - Select "Codespaces" tab
-   - Click "Create codespace on main"
-   - Wait for the environment to build (2-3 minutes)
-
-2. **Authenticate to Azure:**
-   ```bash
-   az login --use-device-code
-   ```
-
-3. **Set your subscription:**
-   ```bash
-   az account list --output table
-   az account set --subscription "YOUR_SUBSCRIPTION_ID"
-   ```
-
-4. **Run the setup:**
-   ```bash
-   # 1. Configure Azure DevOps (Required)
-   ./scripts/setup-ado-org.sh
-
-   # 2. Setup Lab Environment
-   ./setup.sh
-   ```
-
-### Option 2: VS Code with DevContainer (Local)
-
-1. **Prerequisites:**
-   - Docker Desktop installed and running
-   - VS Code with "Dev Containers" extension
-
-2. **Open the repository:**
-   ```bash
-   git clone https://github.com/tdevere/ADOLab_Networking.git
-   cd ADOLab_Networking
-   code .
-   ```
-
-3. **Reopen in Container:**
-   - Press `F1` or `Ctrl+Shift+P`
-   - Type "Dev Containers: Reopen in Container"
-   - Wait for the container to build
-
-4. **Follow steps 2-4 from Option 1 above**
-
----
-
-## 📖 Lab Guide
-
-**Follow the comprehensive guide here:**
-👉 [docs/LAB_GUIDE.md](docs/LAB_GUIDE.md)
-
-The guide covers:
-1. Infrastructure Deployment
-2. Agent Registration
-3. Lab Exercises (1-3)
-4. Troubleshooting Steps
-
----
-
-## 🗂️ Repository Structure
-
-```
-labs/dns-standalone/
-├── README.md                    # This file
-├── setup.sh                     # Initial setup script
-├── main.tf                      # Terraform configuration
-├── variables.tf                 # Terraform variables
-├── outputs.tf                   # Terraform outputs
-├── terraform.tfvars.example     # Example variable values
-├── docs/
-│   ├── LAB_GUIDE.md            # Main lab guide
-│   ├── TROUBLESHOOTING.md      # Common issues and solutions
-│   └── RESOURCES.md            # Manual resource creation guide
-└── scripts/
-    ├── generate-ssh-key.sh     # SSH key generation helper
-    ├── validate-prereqs.sh     # Prerequisite checker
-    └── test-dns.sh             # DNS testing helper script
+### 1. Authenticate to Azure
+In the terminal below, run:
+```bash
+az login --use-device-code
 ```
 
----
+### 2. Set your Subscription
+Select the subscription you want to use for the lab:
+```bash
+az account set --subscription "YOUR_SUBSCRIPTION_ID"
+```
 
-## 📊 What Resources Are Created
-
-### Automatically Created by Terraform
-
-✅ **Infrastructure:**
-- 2 Resource Groups (agent-rg, connectivity-rg)
-- 2 Virtual Networks with peering
-- 1 Linux VM (for testing/agent)
-- 1 Azure Key Vault with private endpoint
-- 1 Private DNS Zone
-- Network security groups and rules
-
-**Estimated Monthly Cost:** ~$30-50 (varies by region and runtime)
-
-### Manually Created
-
-⚠️ **Azure DevOps Resources:**
-- Organization (one-time, free)
-- Project (one-time, free)
-- Agent Pool (one-time)
-- Service Connections (per subscription)
-- Personal Access Token (PAT)
-
-**Cost:** Free (included in Azure DevOps free tier)
-
-See [docs/RESOURCES.md](docs/RESOURCES.md) for detailed guidance.
+### 3. Setup the Environment
+Run the setup script. This will configure your Azure DevOps organization and deploy the base infrastructure.
+```bash
+./setup.sh
+```
+*Follow the prompts to enter your ADO Organization URL and PAT.*
 
 ---
 
-## 🎓 Learning Modules
+## 🎓 Start the Labs
 
-| Module | Description | Duration |
-| :--- | :--- | :--- |
-| **[DNS LAB 1: Connectivity Failure](labs/lab1/README.md)** | Diagnose why the pipeline cannot reach Key Vault despite successful DNS resolution. | 60 min |
-<!-- | **[Lab 2: Missing VNet Link](labs/lab2/README.md)** | Fix "Split-Horizon" DNS issues where private zones are unreachable. | 45 min | -->
-<!-- | **[Lab 3: Custom DNS Misconfiguration](labs/lab3/README.md)** | Troubleshoot custom DNS forwarders and conditional forwarding. | 60 min | -->
+Once setup is complete, proceed to the first scenario:
 
----
-
-## 📚 Additional Resources
-
-### Documentation
-- [Azure Private Link Documentation](https://learn.microsoft.com/azure/private-link/)
-- [Azure Private DNS Zones](https://learn.microsoft.com/azure/dns/private-dns-overview)
-- [Terraform Azure Provider](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs)
-
-### Troubleshooting
-- See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for common issues
-- Use the `/dns-troubleshoot` prompt in Copilot Chat for AI assistance
+| Module | Description |
+| :--- | :--- |
+| **[DNS LAB 1: Connectivity Failure](labs/lab1/README.md)** | Diagnose why the pipeline cannot reach Key Vault despite successful DNS resolution. |
+<!-- | **[Lab 2: Missing VNet Link](labs/lab2/README.md)** | Fix "Split-Horizon" DNS issues where private zones are unreachable. | -->
+<!-- | **[Lab 3: Custom DNS Misconfiguration](labs/lab3/README.md)** | Troubleshoot custom DNS forwarders and conditional forwarding. | -->
 
 ---
 
-## ⚠️ Important Notes
+## 🧹 Cleanup
 
-### Cost Management
-- Resources incur charges while running
-- Stop or deallocate VMs when not in use
-- Always run `terraform destroy` when completely done
-- Set up Azure cost alerts for your subscription
+When you are finished with all labs, destroy the resources to avoid costs:
 
-### Cleanup
 ```bash
 terraform destroy -auto-approve
-
-# Verify everything is deleted
-az group list --query "[?starts_with(name, 'tf-')].name" -o table
-
-# Manually delete any remaining resources
-az group delete --name tf-agent-lab-rg --yes --no-wait
-az group delete --name tf-connect-lab-rg --yes --no-wait
 ```
-
----
-
-## 🤝 Getting Help
-
-- **GitHub Issues:** Report bugs or request features
-- **Copilot Chat:** Use `/dns-troubleshoot` for AI assistance
-- **Documentation:** Check docs/ directory for detailed guides
