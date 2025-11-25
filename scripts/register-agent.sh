@@ -56,66 +56,72 @@ else
 fi
 
 SSH_KEY_PATH="$HOME/.ssh/terraform_lab_key"
-if [ ! -f "$SSH_KEY_PATH" ]; then
-    echo -e "${YELLOW}⚠️  SSH key not found at $SSH_KEY_PATH${NC}"
-    echo "Attempting to extract SSH key from Terraform state..."
-    
-    if ! terraform output -raw ssh_private_key > "$SSH_KEY_PATH" 2>/dev/null; then
-        echo -e "${RED}❌ ERROR: Could not retrieve SSH key from Terraform state${NC}"
-        echo "This usually means the infrastructure hasn't been deployed yet."
-        echo ""
-        echo "Run: ./setup.sh"
-        exit 1
-    fi
-    
-    chmod 600 "$SSH_KEY_PATH"
-    echo -e "${GREEN}✓ SSH key extracted from Terraform state${NC}"
+SSH_PUB_KEY_PATH="${SSH_KEY_PATH}.pub"
+
+# Ensure we have a key pair; auto-generate if missing
+if [ ! -f "$SSH_KEY_PATH" ] || [ ! -f "$SSH_PUB_KEY_PATH" ]; then
+    echo -e "${YELLOW}⚠️  SSH key pair missing. Generating automatically...${NC}"
+    ./scripts/generate-ssh-key.sh --force >/dev/null 2>&1 || { echo -e "${RED}❌ Failed to generate SSH key${NC}"; exit 1; }
 fi
 
-# Validate SSH key permissions
-if [ "$(stat -c %a "$SSH_KEY_PATH" 2>/dev/null || stat -f %A "$SSH_KEY_PATH" 2>/dev/null)" != "600" ]; then
-    echo -e "${YELLOW}⚠️  SSH key has incorrect permissions. Fixing...${NC}"
-    chmod 600 "$SSH_KEY_PATH"
+# Extract public key content
+LOCAL_PUB_KEY="$(cat "$SSH_PUB_KEY_PATH" 2>/dev/null || echo '')"
+if [ -z "$LOCAL_PUB_KEY" ]; then
+    echo -e "${RED}❌ ERROR: Unable to read local public key${NC}"
+    exit 1
 fi
+
+# Read terraform.tfvars public key value
+TFVARS_PUB_KEY="$(grep -E '^admin_ssh_key' terraform.tfvars 2>/dev/null | sed 's/admin_ssh_key\s*=\s*"//; s/"\s*$//')"
+
+if [ -z "$TFVARS_PUB_KEY" ]; then
+    echo -e "${YELLOW}⚠️  admin_ssh_key not found in terraform.tfvars. Inserting current key...${NC}"
+    echo "admin_ssh_key = \"$LOCAL_PUB_KEY\"" >> terraform.tfvars
+    TFVARS_PUB_KEY="$LOCAL_PUB_KEY"
+fi
+
+# If mismatch, auto-repair tfvars and re-apply Terraform to push new key
+if [ "$TFVARS_PUB_KEY" != "$LOCAL_PUB_KEY" ]; then
+    echo -e "${YELLOW}⚠️  Public key mismatch between local key and terraform.tfvars. Auto-repairing...${NC}"
+    cp terraform.tfvars terraform.tfvars.bak_$(date +%s)
+    # Replace line
+    sed -i "s|^admin_ssh_key.*|admin_ssh_key = \"$LOCAL_PUB_KEY\"|" terraform.tfvars
+    echo -e "${BLUE}Applying Terraform to update VM authorized key...${NC}"
+    terraform apply -auto-approve -lock=false >/dev/null 2>&1 || {
+        echo -e "${RED}❌ Terraform apply failed while updating SSH key${NC}"; exit 1; }
+    echo -e "${GREEN}✓ VM SSH key updated via Terraform${NC}"
+fi
+
+# Re-fetch VM IP after potential apply
+VM_IP=$(terraform output -raw vm_public_ip 2>/dev/null || echo "$VM_IP")
+
+chmod 600 "$SSH_KEY_PATH" 2>/dev/null || true
+chmod 644 "$SSH_PUB_KEY_PATH" 2>/dev/null || true
 
 # Test SSH connectivity before attempting agent registration
 echo -e "${BLUE}Testing SSH connectivity to $VM_IP...${NC}"
-if ! ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes -i "$SSH_KEY_PATH" "azureuser@$VM_IP" "echo 'SSH OK'" 2>/dev/null; then
-    echo -e "${YELLOW}⚠️  Cannot connect with current SSH key${NC}"
-    echo "Attempting to refresh SSH key from Terraform state..."
-    
-    # Try to get fresh key from Terraform
-    if terraform output -raw ssh_private_key > "$SSH_KEY_PATH.new" 2>/dev/null; then
-        chmod 600 "$SSH_KEY_PATH.new"
-        
-        # Test with the new key
-        if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes -i "$SSH_KEY_PATH.new" "azureuser@$VM_IP" "echo 'SSH OK'" 2>/dev/null; then
-            mv "$SSH_KEY_PATH.new" "$SSH_KEY_PATH"
-            echo -e "${GREEN}✓ SSH key refreshed successfully${NC}"
+if ! ssh -o StrictHostKeyChecking=no -o ConnectTimeout=12 -o BatchMode=yes -i "$SSH_KEY_PATH" "azureuser@$VM_IP" "echo 'SSH OK'" 2>/dev/null; then
+    echo -e "${YELLOW}⚠️  Direct SSH failed. Injecting public key via run-command as fallback...${NC}"
+    INJECT_SCRIPT="echo '$LOCAL_PUB_KEY' >> /home/azureuser/.ssh/authorized_keys && chmod 600 /home/azureuser/.ssh/authorized_keys"
+    if az vm run-command invoke --command-id RunShellScript --name "$(terraform output -raw vm_name 2>/dev/null || echo dns-lab-vm)" --resource-group "$(terraform output -raw resource_group_name 2>/dev/null)" --scripts "$INJECT_SCRIPT" >/dev/null 2>&1; then
+        sleep 5
+        if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=12 -o BatchMode=yes -i "$SSH_KEY_PATH" "azureuser@$VM_IP" "echo 'SSH OK'" 2>/dev/null; then
+            echo -e "${GREEN}✓ SSH connectivity restored via key injection${NC}"
         else
-            rm -f "$SSH_KEY_PATH.new"
-            echo -e "${RED}❌ ERROR: Cannot connect to VM via SSH${NC}"
-            echo ""
-            echo "The SSH key in Terraform state doesn't match the VM's authorized key."
-            echo "This happens when the VM was recreated manually or the key was changed."
-            echo ""
-            echo "To fix:"
-            echo "1. Regenerate the SSH key and update the VM:"
-            echo "   ./scripts/generate-ssh-key.sh"
-            echo "   terraform apply -auto-approve"
-            echo ""
-            echo "2. Then retry agent registration:"
-            echo "   ./scripts/register-agent.sh"
+            echo -e "${RED}❌ SSH still failing after key injection${NC}"
+            echo "Manual intervention required. Consider destroying and re-running ./setup.sh"
             exit 1
         fi
     else
-        echo -e "${RED}❌ ERROR: Cannot retrieve SSH key from Terraform${NC}"
-        echo "Please ensure infrastructure is deployed: ./setup.sh"
+        echo -e "${RED}❌ Failed to inject SSH key using run-command${NC}"
+        echo "Verify VM name and resource group, then retry."
         exit 1
     fi
+else
+    echo -e "${GREEN}✓ SSH connectivity verified${NC}"
 fi
 
-echo -e "${GREEN}✓ SSH connectivity verified${NC}"
+echo -e "${GREEN}✓ Proceeding with agent configuration${NC}"
 
 # 2. Prepare Agent Script
 AGENT_NAME="dns-lab-agent-$(date +%s)"
