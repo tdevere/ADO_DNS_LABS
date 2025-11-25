@@ -1,66 +1,110 @@
-# Standalone DNS Lab Series
+# Azure DNS Troubleshooting Labs
 
 ## 🎯 Overview
 
-This lab simulates real-world Azure networking scenarios. You will play the role of a **Support Engineer** troubleshooting pipeline failures caused by infrastructure drift and DNS misconfigurations.
+Hands-on Azure DNS and private endpoint troubleshooting. After this single README you can start any lab module directly—no separate guide needed.
 
-**What You'll Learn:**
-- Troubleshoot DNS A record misconfigurations
-- Diagnose missing Private DNS zone VNet links
-- Understand Azure Private Endpoint DNS architecture
+**What You'll Do:**
+- Deploy baseline infra with Terraform (VNet, VM, Key Vault + private endpoint, Private DNS zone)
+- Register a self‑hosted Azure DevOps agent
+- Configure and run a pipeline that validates DNS + secret access
+- Introduce and diagnose DNS failures (A record drift, missing VNet link, custom DNS forwarding)
 
-**Time Estimate:** 1-2 hours
+**Estimated Time:** 3–4 hours for full series (current enabled: Lab 1; others optional / commented).
+
+👉 AI helper prompts: `docs/AI_PROMPTS.md`
 
 ---
 
 ## 📋 Prerequisites
 
-1. **Azure Subscription** (Contributor role required)
-2. **Azure DevOps Organization** (Free at https://dev.azure.com)
+| Requirement | Notes |
+|-------------|-------|
+| Azure Subscription | Contributor rights |
+| Azure DevOps Org + PAT | Create at https://dev.azure.com (PAT needs: Service Connections + Agent Pools) |
+| Codespaces (recommended) | Repo already dev‑container enabled |
+| CLI Tools | Azure CLI, Terraform (preinstalled here) |
 
 ---
 
-## 🚀 Getting Started (Codespaces)
+## 🚀 Setup (Single Pass)
 
-This lab is designed to run in **GitHub Codespaces**. No local setup is required.
-
-### 1. Authenticate to Azure
-In the terminal below, run:
+1. Azure login:
 ```bash
 az login --use-device-code
 ```
-
-### 2. Set your Subscription
-Select the subscription you want to use for the lab:
+2. Select subscription:
 ```bash
-az account set --subscription "YOUR_SUBSCRIPTION_ID"
+az account set --subscription "<SUBSCRIPTION_ID>"
 ```
-
-### 3. Setup the Environment
-Run the setup script. This will configure your Azure DevOps organization and deploy the base infrastructure.
+3. Deploy infrastructure & prepare ADO (prompts for Org URL + PAT):
 ```bash
 ./setup.sh
 ```
-*Follow the prompts to enter your ADO Organization URL and PAT.*
+4. Register self-hosted agent in pool `DNS-Lab-Pool`:
+```bash
+./scripts/register-agent.sh
+```
+5. Create / update pipeline & service connection (injects Key Vault name):
+```bash
+./scripts/setup-pipeline.sh
+```
+	Expected results:
+	- `pipeline.yml` KeyVaultName replaced with dynamic value
+	- Service connection `LabConnection` authorized for all pipelines
+	- Key Vault access policy (or RBAC role) granted for secrets get/list
 
 ---
 
-## 🎓 Start the Labs
+## ✅ Optional Base Validation
+```bash
+./scripts/validate-base.sh
+```
+Confirms:
+- Private DNS resolves `<kv>.vault.azure.net` to `10.1.2.x`
+- TLS handshake to Key Vault (403 is fine—auth not required for DNS test)
 
-Once setup is complete, proceed to the first scenario:
+Manual spot checks:
+```bash
+KV_NAME=$(terraform output -raw key_vault_name)
+VM_IP=$(terraform output -raw vm_public_ip)
+ssh -i ~/.ssh/terraform_lab_key azureuser@"$VM_IP" "nslookup ${KV_NAME}.vault.azure.net"
+ssh -i ~/.ssh/terraform_lab_key azureuser@"$VM_IP" "curl -sv https://${KV_NAME}.vault.azure.net" | true
+```
 
-| Module | Description |
-| :--- | :--- |
-| **[Connectivity Failure](labs/lab1/README.md)** | Diagnose why the pipeline cannot reach Key Vault despite successful DNS resolution. |
-| **[Missing VNet Link](labs/lab2/README.md)** | Fix "Split-Horizon" DNS issues where private zones are unreachable. |
-<!-- | **[Custom DNS Misconfiguration](labs/lab3/README.md)** | Troubleshoot custom DNS forwarders and conditional forwarding. | -->
+---
+
+## 🧪 Modules
+
+| Module |
+|--------|
+| [Connectivity Failure](labs/lab1/README.md) |
+| [Missing VNet Link](labs/lab2/README.md) |
+
+Start any module after base validation, e.g.:
+```bash
+cd labs/lab2   # Missing VNet Link (module 2)
+cat README.md
+```
 
 ---
 
 ## 🧹 Cleanup
-
-When you are finished with all labs, destroy the resources to avoid costs:
-
+Destroy lab resources when finished:
 ```bash
 terraform destroy -auto-approve
 ```
+
+---
+
+## 🤖 AI Assistant Tip
+Use concise prompts, e.g.:
+```
+"Start connectivity failure module"
+"Show Key Vault DNS resolution"
+"Suggest next diagnostics for secret timeout"
+```
+
+---
+
+*(Legacy `docs/LAB_GUIDE.md` content consolidated; no separate guide needed.)*
