@@ -8,7 +8,7 @@ pool:
 
 variables:
   - name: KeyVaultName
-    value: 'kv-dns-lab-c4cbb3dd'  # Key Vault name from terraform output
+    value: 'kv-dns-lab-16395fa5'  # Placeholder; replaced by scripts/setup-pipeline.sh using current terraform output
 
 stages:
 - stage: DNSValidation
