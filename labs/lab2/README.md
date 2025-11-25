@@ -27,21 +27,41 @@ This exercise simulates a common but confusing DNS issue where the Private DNS Z
 
 ## 🏗️ Lab Architecture
 
-```
-Agent VNet (10.0.0.0/16)
-  └─ Agent VM (10.0.1.x)
-       │
-       │ ❌ MISSING LINK
-       ▼
-Private DNS Zone: privatelink.vaultcore.azure.net
-  └─ A Record: <keyvault-name> -> 10.1.2.x (Correct Private IP)
+Below: current (broken) flow vs expected (healthy). The only difference is the presence of a VNet link allowing the resolver to consult the Private DNS Zone.
 
-Result:
-Agent VM -> DNS Query -> Azure Recursive Resolver (168.63.129.16)
-  -> Checks linked zones -> None found
-  -> Falls back to Public DNS
-  -> Resolves to Public IP (e.g., 52.x.x.x)
+```mermaid
+flowchart TB
+      subgraph A[Agent VNet 10.0.0.0/16]
+            VM[Agent VM 10.0.1.x]
+      end
+
+      DNS[Azure Recursive Resolver\n168.63.129.16]
+      ZONE[Private DNS Zone\nprivatelink.vaultcore.azure.net]
+      RECORD[A Record\n<keyvault-name> → 10.1.2.x]
+      PE[Private Endpoint IP\n10.1.2.x]
+      PUB[Public DNS Result\n52.x.x.x]
+
+      %% Broken Path
+      VM -->|Query vault.azure.net| DNS
+      DNS -->|No linked zone| PUB
+      PUB -->|Resolves public IP| VM
+
+      %% Expected Path
+      VM -->|Query vault.azure.net| DNS
+      DNS -->|Linked VNet → Zone| ZONE
+      ZONE --> RECORD --> PE
+      PE -->|Private IP answer| VM
+
+      classDef broken stroke:#d9534f,stroke-width:2,color:#d9534f;
+      classDef good stroke:#5cb85c,stroke-width:2,color:#5cb85c;
+      PUB:::broken
+      PE:::good
 ```
+
+Key points:
+- Azure resolver only evaluates Private DNS Zones that are linked to the querying VNet.
+- Absence of the link causes fallback to public DNS, yielding a public IP.
+- The zone and record can be perfectly correct yet invisible to the VNet without the link.
 
 ---
 
