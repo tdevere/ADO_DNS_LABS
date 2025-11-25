@@ -223,31 +223,16 @@ This confirms the zone has the correct private IP. The problem is that our VNet 
 
 ## 🛠️ Fix the Issue
 
-You have two choices. As a Support Engineer, you often have to decide between a quick "Hotfix" to get production running and a "Proper" fix to ensure consistency.
-
-### Option 1: The "Hotfix" (Manual Azure CLI)
-*Use this when production is down and you need immediate recovery.*
-```bash
-# 1. Get Variables
-RG_NAME=$(terraform output -raw resource_group_name)
-VNET_ID=$(az network vnet show --resource-group $RG_NAME --name vnet-dns-lab --query id -o tsv)
-
-# 2. Create the Link
-az network private-dns link vnet create \
-  --resource-group $RG_NAME \
-  --zone-name privatelink.vaultcore.azure.net \
-  --name link-vnet-dns-lab \
-  --virtual-network $VNET_ID \
-  --registration-enabled false
-```
-
-### Option 2: The "Proper" Fix (Infrastructure as Code)
-*Use this to ensure your Terraform state matches reality.*
+Restore the infrastructure to its baseline configuration:
 
 ```bash
 ./fix-lab.sh lab2
 ```
-*Note: In this lab, `fix-lab.sh` just runs `terraform apply` to enforce the configuration defined in `main.tf`.*
+
+This script will:
+- Re-enable Key Vault public network access (so Terraform can connect)
+- Run `terraform apply` to restore all infrastructure including the VNet link
+- Bring the environment back to the working baseline state
 
 ---
 
