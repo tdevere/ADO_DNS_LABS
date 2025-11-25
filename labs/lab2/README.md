@@ -238,41 +238,13 @@ This script will:
 
 ## ✅ Verify the Fix
 
-### 1. Check DNS Resolution (from the VM)
+### Re-run the Pipeline
 
-SSH back into the agent VM (if you aren't there already) and test again:
+1. Go back to Azure DevOps
+2. Find your failed pipeline run
+3. Click **"Rerun failed jobs"**
 
-```bash
-# Clear DNS cache first (important!)
-sudo systemd-resolve --flush-caches
-
-# Test resolution
-KV_NAME=$(terraform output -raw key_vault_name)
-nslookup ${KV_NAME}.vault.azure.net
-```
-
-**Expected Output (Fixed State):**
-```text
-Name:   kv-dns-lab-xxxx.privatelink.vaultcore.azure.net
-Address: 10.1.2.5  <-- PRIVATE IP (Correct)
-```
-✅ **Success!** The DNS now resolves to the correct Private Endpoint IP.
-
-### 2. Automated Verification (Optional)
-
-Run the lab-specific verification script:
-```bash
-./scripts/verify-lab.sh lab2
-```
-
-This will check VNet link status and DNS resolution automatically.
-
-### 3. Re-run the Pipeline
-1. Go back to Azure DevOps.
-2. Find your failed pipeline run.
-3. Click **"Rerun failed jobs"**.
-
-It should now succeed (green checkmarks everywhere)! 🎉
+The pipeline should now succeed - the "Fetch Secrets from Key Vault" task will complete successfully and the pipeline will show green checkmarks. 🎉
 
 ---
 
