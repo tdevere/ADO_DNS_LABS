@@ -8,7 +8,7 @@ pool:
 
 variables:
   - name: KeyVaultName
-    value: 'kv-dns-lab-16395fa5'  # Placeholder replaced by setup-pipeline.sh
+    value: 'kv-dns-lab-c56368d5'  # Placeholder replaced by setup-pipeline.sh
   - name: Hint_KeyVaultMismatch
     value: 'If AzureKeyVault@2 times out or shows NXDOMAIN, confirm KeyVaultName matches terraform output: terraform output -raw key_vault_name and re-run ./scripts/setup-pipeline.sh'
 
