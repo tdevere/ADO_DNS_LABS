@@ -46,6 +46,24 @@ resource "azurerm_virtual_network" "vnet" {
   dns_servers = var.lab_scenario == "dns_exercise3" ? ["10.1.2.50"] : []
 }
 
+resource "azurerm_network_security_group" "subnet_nsg" {
+  name                = "nsg-subnet-agents"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+
+  security_rule {
+    name                       = "AllowSSH"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "22"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+}
+
 resource "azurerm_subnet" "subnet" {
   name                 = var.subnet_name
   resource_group_name  = azurerm_resource_group.rg.name
@@ -54,6 +72,11 @@ resource "azurerm_subnet" "subnet" {
   
   # Enable Private Endpoint policies
   private_endpoint_network_policies = "Enabled"
+}
+
+resource "azurerm_subnet_network_security_group_association" "subnet_nsg_assoc" {
+  subnet_id                 = azurerm_subnet.subnet.id
+  network_security_group_id = azurerm_network_security_group.subnet_nsg.id
 }
 
 # Key Vault
