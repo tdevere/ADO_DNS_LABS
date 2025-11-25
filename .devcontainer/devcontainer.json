@@ -21,7 +21,8 @@
         "shd101wyy.markdown-preview-enhanced"
       ],
       "settings": {
-        "markdown.preview.openMarkdownLinks": "inPreview"
+        "markdown.preview.openMarkdownLinks": "inPreview",
+        "markdown-preview-enhanced.automaticallyShowPreviewOfMarkdownBeingEdited": true
       }
     }
   },
