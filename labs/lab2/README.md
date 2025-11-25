@@ -77,9 +77,34 @@ To start this exercise, you will self-inject a fault into the environment to sim
 
    > **Note:** Once this script finishes, switch your mindset. You are the on-call responder. The application team reports that they are suddenly connecting to the public endpoint instead of the private one.
 
-2. **Verify the failure:**
+2. **Verify the failure by running the pipeline:**
 
-Connect to your Agent VM and check how the Key Vault name resolves.
+Go to Azure DevOps and queue a new run of the `DNS-Lab-Pipeline`. The pipeline should fail during the "Fetch Secrets from Key Vault" task.
+
+**Expected Pipeline Failure:**
+```text
+Starting: Fetch Secrets from Key Vault
+==============================================================================
+Task         : Azure Key Vault
+Description  : Download Azure Key Vault secrets
+Version      : 2.259.2
+Author       : Microsoft Corporation
+Help         : https://docs.microsoft.com/azure/devops/pipelines/tasks/deploy/azure-key-vault
+==============================================================================
+SubscriptionId: fcfa67ae-efeb-417c-a966-48b4937d2918.
+Key vault name: kv-dns-lab-c56368d5.
+Downloading secret value for: TestSecret.
+##[error]
+TestSecret: "Public network access is disabled and request is not from a trusted service 
+nor via an approved private link.
+Caller: appid=***;oid=5b710bd4-3ad8-48da-966f-d487510739cb;iss=https://sts.windows.net/...
+Vault: kv-dns-lab-c56368d5;location=westus2. The specified Azure service connection needs 
+to have Get, List secret management permissions on the selected key vault..."
+Uploading /home/azureuser/azagent/_work/1/ProvisionKeyVaultPermissions.ps1 as attachment
+Finishing: Fetch Secrets from Key Vault
+```
+
+3. **Investigate DNS resolution from the agent VM:**
 
 ```bash
 # 1. Get Key Vault Name
