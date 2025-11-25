@@ -104,7 +104,13 @@ Uploading /home/azureuser/azagent/_work/1/ProvisionKeyVaultPermissions.ps1 as at
 Finishing: Fetch Secrets from Key Vault
 ```
 
-3. **Investigate DNS resolution from the agent VM:**
+---
+
+## 🔍 Investigation: Systematic Troubleshooting
+
+### STEP 1: Investigate DNS Resolution
+
+Connect to your agent VM and check how the Key Vault resolves:
 
 ```bash
 # 1. Get Key Vault Name
@@ -121,45 +127,30 @@ Name:   kv-dns-lab-xxxx.vault.azure.net
 Address: 52.154.x.x  <-- PUBLIC IP (Wrong for Private Link)
 ```
 
----
+### STEP 2: Analyze the Failure
 
-## 🔍 Investigation: Systematic Troubleshooting
+What information can you gather from the error message and DNS resolution?
 
-### STEP 1: Scope the Problem (What Do We Know?)
+1. **Pipeline error says:**
+   - "Public network access is disabled"
+   - "Request is not from a trusted service nor via an approved private link"
 
-Before jumping into Azure CLI commands, answer these questions:
+2. **DNS resolution shows:**
+   - Returning public IP addresses (52.x, 13.x, or 20.x range)
+   - Not returning the private endpoint IP (10.1.2.x)
 
-1. **What symptom are we seeing?**
-   - Pipeline: `___________________`
-   - DNS resolution: `___________________`
-   - IP type (public/private): `___________________`
+**Key observations:**
+- The agent is resolving to public IPs instead of the private endpoint
+- Public access is disabled on the Key Vault
+- Even if the agent could reach those public IPs, the Key Vault would reject the connection
 
-2. **What's different from Lab 1?**
-   - Lab 1: DNS returned wrong private IP (10.1.2.50 instead of 10.1.2.4)
-   - Lab 2: DNS returns `___________________`
-
-3. **What does the pipeline DNS check show?**
-   - Go to your failed pipeline run
-   - Check the "DNS Resolution Validation" stage
-   - What IP did it resolve? `___________________`
-
-**For this lab scenario:**
-- DNS is "working" (no NXDOMAIN errors)
-- But it's returning the public IP (52.x, 13.x, or 20.x range)
-- This means the Private DNS Zone isn't being consulted
-- **Why?** Let's find out...
+**What does this tell us?** Two potential issues:
+- DNS resolution path (why public instead of private?)
+- Network access path (how to reach private endpoint?)
 
 ---
 
-### STEP 2: Analyze the Symptoms
-
-| Observation | Conclusion |
-|-------------|------------|
-| `nslookup` returns an IP | DNS is working generally. |
-| IP is Public (not 10.x.x.x) | We are hitting the public endpoint, not the private one. |
-| Private Endpoint exists | Confirmed via Terraform/Portal. |
-
-### STEP 3: Check Private DNS Zone Links
+### STEP 3: Check Private DNS Zone Configuration
 
 The most common cause for resolving a Public IP when a Private Endpoint exists is a missing **Virtual Network Link**.
 
