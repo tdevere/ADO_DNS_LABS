@@ -76,7 +76,10 @@ case $LAB_ID in
         echo "Injecting Lab 2 fault (remove VNet link)..."
         silent az network private-dns link vnet delete \
             --resource-group "$RG_NAME" --zone-name "$ZONE_NAME" --name "$VNET_LINK_NAME" --yes || true
-        echo "✅ Lab 2 fault injected. Begin troubleshooting."
+        echo "✅ Lab 2 fault injected."
+        echo ""
+        echo "Next: Run the pipeline to reproduce the failure."
+        echo "Go to Azure DevOps and queue a new run of 'DNS-Lab-Pipeline'."
         ;;
     lab3)
         echo "Injecting Lab 3 fault (custom DNS server)..."
@@ -88,4 +91,7 @@ case $LAB_ID in
         ;;
 esac
 
-echo "Next: Use nslookup, dig, curl to observe failure." 
+# Default instruction for labs without specific guidance
+if [ "$LAB_ID" != "lab2" ]; then
+    echo "Next: Use nslookup, dig, curl to observe failure."
+fi 
