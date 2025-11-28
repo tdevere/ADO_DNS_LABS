@@ -94,17 +94,3 @@ Destroy lab resources when finished:
 ```bash
 terraform destroy -auto-approve
 ```
-
----
-
-## 🤖 AI Assistant Tip
-Use concise prompts, e.g.:
-```
-"Start connectivity failure module"
-"Show Key Vault DNS resolution"
-"Suggest next diagnostics for secret timeout"
-```
-
----
-
-*(Legacy `docs/LAB_GUIDE.md` content consolidated; no separate guide needed.)*
