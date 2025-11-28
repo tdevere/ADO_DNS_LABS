@@ -4,6 +4,8 @@
 
 This exercise simulates a network connectivity failure where private endpoint access becomes unreliable. Your deployment pipeline intermittently fails to reach Azure Key Vault, despite infrastructure appearing properly configured. You'll need to investigate DNS resolution, network paths, and access policies to identify the root cause.
 
+> Tip: As a support engineer, remember the pipeline error is a symptom, not the root cause. Infrastructure issues (like DNS) often surface first as application failures (Key Vault access).
+
 ## 🌍 Real-World Scenario
 
 **Tuesday, 10:00 AM:** Your deployment pipeline suddenly fails with timeout errors accessing Azure Key Vault. The infrastructure team confirms "nothing changed" overnight. Private DNS zones exist, the private endpoint shows healthy status in the portal, and the agent VM can ping other resources without issue.
@@ -59,9 +61,15 @@ flowchart TB
 ```
 
 Reflection prompts:
-- Which hop produces the answer actually returned to the agent?
-- Which component appears unused in the broken path?
-- What additional evidence would confirm why the public IP is chosen?
+- Which system ultimately returned the Public IP to your agent? (Azure's central service or the public internet?)
+- Which crucial VNet connectivity piece did the agent's VNet fail to use? (Think: subscription to the private phone book.)
+- What final confirmation shows the agent is falling back to public DNS? (Hint: the IP range returned by `nslookup`.)
+
+Analogy cheat sheet:
+- Private DNS Zone → "Private Phone Book" (used to find private addresses)
+- Virtual Network Link → "Phone Book Subscription" (tells the VNet to use the private phone book)
+- Azure Recursive Resolver (168.63.129.16) → "Azure's Central Directory Service"
+- Split-Horizon DNS → "Two Views of the World" (public vs private answer)
 
 ---
 
@@ -131,6 +139,8 @@ This is the same process you'll use on the job when a pipeline breaks. Work thro
 
 Before logging into the agent or diving into Azure resources, gather basic information about the failure. This is what support engineers ask first.
 
+> Tip: If an error mentions "public network" or "private link", your next step is to investigate DNS resolution. The pipeline is likely using the public address due to DNS configuration.
+
 **Answer these questions:**
 
 1. **What stage failed?**
@@ -183,7 +193,7 @@ TestSecret: "Public network access is disabled and request is not from a trusted
 
 ### STEP 2: Investigate DNS Resolution
 
-> **Note:** Not all customers will grant you SSH access to their agent. If you don't have access, you can still troubleshoot using Azure Portal (check Private DNS Zone links, Private Endpoint connections) and ADO pipeline diagnostic logs. But for this lab, you have full access.
+> Support note: SSH access is not always available. In customer-facing roles, learn to read Azure Portal and Azure CLI outputs for Private DNS Zone links and Private Endpoint connections. `nslookup` from the agent (when accessible) is the definitive test of what the agent sees.
 
 Connect to your agent VM and check how the Key Vault resolves (without relying on Terraform):
 
@@ -299,6 +309,8 @@ This confirms the zone has the correct private IP. The problem is that our VNet 
 
 **Root Cause:** Without the VNet link, Azure's recursive resolver (168.63.129.16) doesn't know to check the Private DNS Zone for this VNet's queries. It falls back to public DNS.
 
+> Gotcha: The DNS query "worked" but returned the wrong answer (a Public IP). The agent's VNet didn't know to consult its Private Phone Book first because the subscription (VNet Link) was missing.
+
 **How DNS resolution works:**
 1. Agent VM sends DNS query to Azure DNS (168.63.129.16)
 2. Azure DNS checks: "Is this VNet linked to any Private DNS Zones?"
@@ -376,6 +388,7 @@ Next time you see private resources resolving to public IPs:
 - [Azure Private Endpoint DNS configuration](https://learn.microsoft.com/en-us/azure/private-link/private-endpoint-dns)
 - [Private Link DNS integration scenarios](https://learn.microsoft.com/en-us/azure/private-link/private-endpoint-dns-integration)
 - [Review pipeline logs and diagnostics (Azure DevOps)](https://learn.microsoft.com/en-us/azure/devops/pipelines/troubleshooting/review-logs?view=azure-devops&tabs=windows-agent)
+ - [Troubleshoot Azure Private Endpoint connectivity](https://learn.microsoft.com/en-us/azure/private-link/private-endpoint-troubleshoot)
 
 **Video Resources:**
 - [Azure Private Link and DNS Integration Scenarios](https://www.youtube.com/watch?v=vJXMF_jHb2Y) by John Savill
