@@ -121,13 +121,44 @@ You are the on-call engineer. The application team reports that the pipeline sud
 
 ---
 
-## 🔍 STEP 1: Reproduce the Issue
+## 🔍 Investigation: Systematic Troubleshooting
 
-Run the pipeline to observe the failure:
+This is the same process you'll use on the job when a pipeline breaks. Work through each step—don't skip ahead.
 
-1. Go to Azure DevOps: `https://dev.azure.com/<YOUR_ORG>/NetworkingLab/_build`
-2. Queue a new run of **DNS-Lab-Pipeline**
-3. Wait for it to fail
+---
+
+### STEP 1: Scope the Problem (What Do We Know?)
+
+Before logging into the agent or diving into Azure resources, gather basic information about the failure. This is what support engineers ask first.
+
+**Answer these questions:**
+
+1. **What stage failed?**
+   - Look at your pipeline run
+   - Which step shows the red ✗?
+   - Answer: `___________________`
+
+2. **What type of agent?**
+   - Self-hosted or Microsoft-hosted?
+   - If self-hosted: What OS? (Windows/Linux/macOS)
+   - Answer: `___________________`
+
+3. **Did this ever work?**
+   - Was this pipeline working before?
+   - If yes, when did it last succeed?
+   - Answer: `___________________`
+
+4. **What does the error message say?**
+   - Read the exact error from the pipeline output
+   - Look for keywords: "public network", "private link", "trusted service"
+   - Answer: `___________________`
+
+5. **What changed recently?**
+   - Any pipeline code changes?
+   - Agent updates?
+   - Infrastructure changes (even by other teams)?
+   - Network changes?
+   - Answer: `___________________`
 
 **Expected Pipeline Output:**
 ```
@@ -146,13 +177,13 @@ Downloading secret value for: TestSecret.
 TestSecret: "Public network access is disabled and request is not from a trusted service nor via an approved private link.
 ```
 
-The error message mentions "public network access is disabled" but doesn't tell you *why* the agent is trying to use public network in the first place.
+> **Tip:** The error message gives you clues, but doesn't tell you the full story. You'll need to investigate DNS resolution to understand *why* the agent is trying to use the public network.
 
 ---
 
-## 🔍 Investigation: Systematic Troubleshooting
+### STEP 2: Investigate DNS Resolution
 
-### STEP 1: Investigate DNS Resolution
+> **Note:** Not all customers will grant you SSH access to their agent. If you don't have access, you can still troubleshoot using Azure Portal (check Private DNS Zone links, Private Endpoint connections) and ADO pipeline diagnostic logs. But for this lab, you have full access.
 
 Connect to your agent VM and check how the Key Vault resolves:
 
@@ -171,7 +202,9 @@ Name:   kv-dns-lab-xxxx.vault.azure.net
 Address: 52.154.x.x  <-- PUBLIC IP (Wrong for Private Link)
 ```
 
-### STEP 2: Analyze the Failure
+---
+
+### STEP 3: Analyze the Failure
 
 What information can you gather from the error message and DNS resolution?
 
@@ -194,11 +227,11 @@ What information can you gather from the error message and DNS resolution?
 
 ---
 
-### STEP 3: Check Private DNS Zone Configuration
+### STEP 4: Check Private DNS Zone Configuration
 
 The most common cause for resolving a Public IP when a Private Endpoint exists is a missing **Virtual Network Link**.
 
-**Check via Azure CLI:**
+**Check via Azure CLI (if you have access):**
 
 ```bash
 # Get Resource Group Name
@@ -211,6 +244,11 @@ az network private-dns link vnet list \
   --output table
 ```
 
+**Check via Azure Portal (alternative method):**
+1. Navigate to **Private DNS Zones** → `privatelink.vaultcore.azure.net`
+2. Click **Virtual network links** in the left menu
+3. Look for a link to your agent VNet
+
 **Expected output (when broken):**
 ```
 (No output - empty list)
@@ -222,7 +260,7 @@ az network private-dns link vnet list \
 
 ---
 
-### STEP 4: Verify the DNS Zone Has the Correct Record
+### STEP 5: Verify the DNS Zone Has the Correct Record
 
 Even though the link is missing, let's confirm the zone itself is configured correctly:
 
@@ -245,12 +283,12 @@ This confirms the zone has the correct private IP. The problem is that our VNet 
 
 ---
 
-### STEP 5: Root Cause Identification
+### STEP 6: Root Cause Identification
 
 | Resource | Status | Result |
 |----------|--------|--------|
 | Private DNS Zone | ✅ Exists | Contains correct A record |
-| A Record in Zone | ✅ Correct | Points to 10.1.2.5 |
+| A Record in Zone | ✅ Correct | Points to 10.1.2.x |
 | VNet Link | ❌ **Missing** | Zone can't answer queries from VNet |
 | Client DNS Query | ⚠️ Falls back | Queries public DNS, gets public IP |
 
