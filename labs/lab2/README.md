@@ -365,7 +365,11 @@ Next time you see private resources resolving to public IPs:
 
 ### 📺 Recommended Watching
 
-If you want to truly master this topic, these videos are the gold standard:
+**Official Documentation:**
+- [Azure Private Endpoint DNS configuration](https://learn.microsoft.com/en-us/azure/private-link/private-endpoint-dns)
+- [Private Link DNS integration scenarios](https://learn.microsoft.com/en-us/azure/private-link/private-endpoint-dns-integration)
+
+**Video Resources:**
 - [Azure Private Link and DNS Integration Scenarios](https://www.youtube.com/watch?v=vJXMF_jHb2Y) by John Savill
 - [Azure Private Endpoint DNS Configuration](https://www.youtube.com/watch?v=j9QmMEWmcfo) by John Savill
 
