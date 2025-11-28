@@ -81,12 +81,6 @@ ssh -i ~/.ssh/terraform_lab_key azureuser@"$VM_IP" "curl -sv https://${KV_NAME}.
 | [Access Reliability Scenario](labs/lab1/README.md) | Pipeline secret retrieval shows inconsistent behavior; investigate layers (agent, network, name resolution). |
 | [Private Endpoint Connectivity](labs/lab2/README.md) | Network access to private resources fails intermittently; investigate connectivity patterns without assuming root cause. |
 
-Start any module after base validation, e.g.:
-```bash
-cd labs/lab2   # Private Endpoint Connectivity
-cat README.md
-```
-
 ---
 
 ## 🧹 Cleanup
