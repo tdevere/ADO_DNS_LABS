@@ -29,6 +29,8 @@ terraform.rc
 *.backup
 # Ignore plan files
 *.tfplan
+tfplan
+terraform.tfvars.bak_*
 
 # Azure DevOps local environment (contains PAT/secrets) - NEVER commit
 .ado.env
