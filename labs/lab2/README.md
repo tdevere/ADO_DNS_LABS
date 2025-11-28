@@ -185,11 +185,13 @@ TestSecret: "Public network access is disabled and request is not from a trusted
 
 > **Note:** Not all customers will grant you SSH access to their agent. If you don't have access, you can still troubleshoot using Azure Portal (check Private DNS Zone links, Private Endpoint connections) and ADO pipeline diagnostic logs. But for this lab, you have full access.
 
-Connect to your agent VM and check how the Key Vault resolves:
+Connect to your agent VM and check how the Key Vault resolves (without relying on Terraform):
 
 ```bash
-# 1. Get Key Vault Name
-KV_NAME=$(terraform output -raw key_vault_name)
+# 1. Identify the Key Vault name from the pipeline log or Azure Portal
+#    Azure DevOps log shows: "Key vault name: kv-dns-lab-xxxxxxxx"
+#    Or in Azure Portal: Key Vaults → locate your lab vault name
+KV_NAME="<your-key-vault-name>"
 
 # 2. Test DNS Resolution
 nslookup ${KV_NAME}.vault.azure.net
@@ -231,17 +233,20 @@ What information can you gather from the error message and DNS resolution?
 
 The most common cause for resolving a Public IP when a Private Endpoint exists is a missing **Virtual Network Link**.
 
-**Check via Azure CLI (if you have access):**
+**Check via Azure CLI (no Terraform required):**
 
 ```bash
-# Get Resource Group Name
-RG_NAME=$(terraform output -raw resource_group_name)
+# Get Resource Group Name from Portal or CLI
+# Option A: Portal → Resource groups → locate the lab RG name
+# Option B: CLI filter by naming convention
+az group list --query "[?contains(name, 'dns-lab')].name" -o tsv
+RG_NAME="<your-resource-group-name>"
 
 # List all VNet links for the zone
 az network private-dns link vnet list \
-  --resource-group $RG_NAME \
-  --zone-name privatelink.vaultcore.azure.net \
-  --output table
+   --resource-group $RG_NAME \
+   --zone-name privatelink.vaultcore.azure.net \
+   --output table
 ```
 
 **Check via Azure Portal (alternative method):**
@@ -265,13 +270,13 @@ az network private-dns link vnet list \
 Even though the link is missing, let's confirm the zone itself is configured correctly:
 
 ```bash
-KV_NAME=$(terraform output -raw key_vault_name)
-
+# Use the Key Vault name identified earlier
+# KV_NAME is set from pipeline logs or Portal
 az network private-dns record-set a show \
-  --resource-group $RG_NAME \
-  --zone-name privatelink.vaultcore.azure.net \
-  --name $KV_NAME \
-  --query "aRecords[0].ipv4Address" -o tsv
+   --resource-group $RG_NAME \
+   --zone-name privatelink.vaultcore.azure.net \
+   --name $KV_NAME \
+   --query "aRecords[0].ipv4Address" -o tsv
 ```
 
 **Expected output:**
@@ -360,6 +365,8 @@ Next time you see private resources resolving to public IPs:
 4. Test DNS from within the VNet (not from your laptop)
 5. Clear DNS caches after fixing
 6. Verify with both `nslookup` and actual connection test
+
+> Important: During diagnosis and troubleshooting, do not rely on Terraform outputs or state. Treat Terraform purely as the provisioning tool. Use Azure DevOps logs, Azure Portal, and Azure CLI to discover names and configurations.
 
 ---
 
