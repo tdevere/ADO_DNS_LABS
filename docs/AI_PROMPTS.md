@@ -1,33 +1,47 @@
 # AI Lab Assistant Prompts
 
-Use these prompts with GitHub Copilot to help you navigate the lab.
+Use these prompts with GitHub Copilot to help navigate the lab exercises.
 
 ## 🛠️ Setup & Configuration
 
+**Initial Setup:**
+> "Help me set up the lab environment. What commands do I run?"
+
 **Configure Pipeline:**
-> "I have deployed the infrastructure. Please update the `pipeline.yml` file with the correct Key Vault name from the Terraform outputs and verify my setup."
+> "Update the pipeline.yml file with the current Key Vault name from Terraform outputs."
 
-**Check Prerequisites:**
-> "Check if my environment is ready for DNS LAB 1. Verify that the Agent is online and the Service Connection is set up."
+**Check Agent Status:**
+> "Verify the Azure DevOps agent is online and registered in the DNS-Lab-Pool."
 
-**Start DNS LAB 1:**
-> "I am ready for DNS LAB 1. Please apply the 'dns_exercise1' Terraform scenario."
+## 🧪 Lab Modules
 
-## 🧪 Lab Scenarios
+**Start Lab 1 (Access Reliability):**
+> "Break the lab for module 1. What script do I run?"
 
-**Start Lab 1:**
-> "I am ready for Lab 1. Please apply the 'dns_exercise1' Terraform scenario and explain what is changing in the infrastructure."
+**Start Lab 2 (Private Endpoint Connectivity):**
+> "Start Lab 2. What infrastructure changes will occur?"
 
-**Start Lab 2:**
-> "Switch the environment to Lab 2 (Missing VNet Links)."
-
-**Reset to Base:**
-> "Reset the environment to the base configuration (working state)."
+**Fix Current Lab:**
+> "Restore the infrastructure to working state. What's the fix command?"
 
 ## 🔍 Troubleshooting
 
-**Analyze DNS:**
-> "I am getting an NXDOMAIN error. Please help me diagnose the DNS resolution path for my Key Vault."
+**DNS Investigation:**
+> "The pipeline is failing with a timeout. Help me check DNS resolution from the agent VM."
 
-**Explain Concepts:**
-> "Explain how the Private Endpoint DNS resolution is supposed to work in this lab."
+**Pipeline Errors:**
+> "My pipeline failed with 'Public network access is disabled'. What should I investigate?"
+
+**Connection Testing:**
+> "How do I verify the agent can reach the Key Vault private endpoint?"
+
+## 📚 Learning
+
+**Explain Architecture:**
+> "Explain how Private DNS Zone VNet links enable private endpoint resolution."
+
+**Understand Failure:**
+> "What causes split-horizon DNS behavior in Azure?"
+
+**Best Practices:**
+> "What are the common mistakes when configuring Azure Private Endpoints?"

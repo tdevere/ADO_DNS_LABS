@@ -23,6 +23,16 @@ fi
 ADO_POOL=${ADO_POOL:-Default}
 
 echo "Restoring configuration using Infrastructure as Code..."
+
+# For Lab 2, re-enable Key Vault public access first so Terraform can connect
+if [ "$LAB_ID" == "lab2" ]; then
+    echo "🔓 Restoring network connectivity for Lab 2..."
+    KV_NAME=$(terraform output -raw key_vault_name 2>/dev/null || echo "")
+    if [ -n "$KV_NAME" ]; then
+        az keyvault update --name "$KV_NAME" --public-network-access Enabled || true
+    fi
+fi
+
 if ! terraform apply -auto-approve -var="lab_scenario=base" -var="ado_org_url=${ADO_ORG_URL}" -var="ado_pat=${ADO_PAT}" -var="ado_pool_name=${ADO_POOL}" -lock=false; then
     echo "⚠️ Terraform apply failed. Checking for stuck resources (InUseSubnetCannotBeDeleted)..."
     

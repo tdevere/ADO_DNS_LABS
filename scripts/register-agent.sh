@@ -56,10 +56,89 @@ else
 fi
 
 SSH_KEY_PATH="$HOME/.ssh/terraform_lab_key"
-if [ ! -f "$SSH_KEY_PATH" ]; then
-    echo -e "${RED}[FAIL] SSH key not found at $SSH_KEY_PATH${NC}"
+SSH_PUB_KEY_PATH="${SSH_KEY_PATH}.pub"
+
+# Ensure we have a key pair; auto-generate if missing
+if [ ! -f "$SSH_KEY_PATH" ] || [ ! -f "$SSH_PUB_KEY_PATH" ]; then
+    echo -e "${YELLOW}⚠️  SSH key pair missing. Generating automatically...${NC}"
+    ./scripts/generate-ssh-key.sh --force >/dev/null 2>&1 || { echo -e "${RED}❌ Failed to generate SSH key${NC}"; exit 1; }
+fi
+
+# Extract public key content
+LOCAL_PUB_KEY="$(cat "$SSH_PUB_KEY_PATH" 2>/dev/null || echo '')"
+if [ -z "$LOCAL_PUB_KEY" ]; then
+    echo -e "${RED}❌ ERROR: Unable to read local public key${NC}"
     exit 1
 fi
+
+# Read terraform.tfvars public key value
+TFVARS_PUB_KEY="$(grep -E '^admin_ssh_key' terraform.tfvars 2>/dev/null | sed 's/admin_ssh_key\s*=\s*"//; s/"\s*$//')"
+
+if [ -z "$TFVARS_PUB_KEY" ]; then
+    echo -e "${YELLOW}⚠️  admin_ssh_key not found in terraform.tfvars. Inserting current key...${NC}"
+    echo "admin_ssh_key = \"$LOCAL_PUB_KEY\"" >> terraform.tfvars
+    TFVARS_PUB_KEY="$LOCAL_PUB_KEY"
+fi
+
+# If mismatch, auto-repair tfvars and re-apply Terraform to push new key
+if [ "$TFVARS_PUB_KEY" != "$LOCAL_PUB_KEY" ]; then
+    echo -e "${YELLOW}⚠️  Public key mismatch between local key and terraform.tfvars. Auto-repairing...${NC}"
+    cp terraform.tfvars terraform.tfvars.bak_$(date +%s)
+    # Replace line
+    sed -i "s|^admin_ssh_key.*|admin_ssh_key = \"$LOCAL_PUB_KEY\"|" terraform.tfvars
+    echo -e "${BLUE}Applying Terraform to update VM authorized key...${NC}"
+    terraform apply -auto-approve -lock=false >/dev/null 2>&1 || {
+        echo -e "${RED}❌ Terraform apply failed while updating SSH key${NC}"; exit 1; }
+    echo -e "${GREEN}✓ VM SSH key updated via Terraform${NC}"
+fi
+
+# Re-fetch VM IP after potential apply
+VM_IP=$(terraform output -raw vm_public_ip 2>/dev/null || echo "$VM_IP")
+
+chmod 600 "$SSH_KEY_PATH" 2>/dev/null || true
+chmod 644 "$SSH_PUB_KEY_PATH" 2>/dev/null || true
+
+# Test SSH connectivity before attempting agent registration
+echo -e "${BLUE}Testing SSH connectivity to $VM_IP...${NC}"
+if ! ssh -o StrictHostKeyChecking=no -o ConnectTimeout=12 -o BatchMode=yes -i "$SSH_KEY_PATH" "azureuser@$VM_IP" "echo 'SSH OK'" 2>/dev/null; then
+    echo -e "${YELLOW}⚠️  Direct SSH failed. Attempting automated recovery...${NC}"
+    RG_NAME="$(terraform output -raw resource_group_name 2>/dev/null || echo '')"
+    VM_NAME="$(terraform output -raw vm_name 2>/dev/null || echo '')"
+    if [ -z "$VM_NAME" ]; then
+        # Fallback: discover VM by public IP
+        VM_NAME=$(az vm list -d --query "[?publicIps=='$VM_IP'].name | [0]" -o tsv 2>/dev/null || echo "")
+    fi
+    if [ -z "$RG_NAME" ] || [ -z "$VM_NAME" ]; then
+        echo -e "${RED}❌ Unable to determine VM name/resource group for key injection${NC}"
+        echo " RG: '$RG_NAME'  VM: '$VM_NAME'"
+        echo "Run: terraform output resource_group_name && terraform output vm_name"
+        exit 1
+    fi
+    echo -e "${BLUE}Using VM '$VM_NAME' in resource group '$RG_NAME' for key injection${NC}"
+    INJECT_SCRIPT="set -e; mkdir -p /home/azureuser/.ssh; touch /home/azureuser/.ssh/authorized_keys; grep -q '${LOCAL_PUB_KEY}' /home/azureuser/.ssh/authorized_keys || echo '${LOCAL_PUB_KEY}' >> /home/azureuser/.ssh/authorized_keys; chmod 700 /home/azureuser/.ssh; chmod 600 /home/azureuser/.ssh/authorized_keys"
+    if az vm run-command invoke --command-id RunShellScript --name "$VM_NAME" --resource-group "$RG_NAME" --scripts "$INJECT_SCRIPT" >/dev/null 2>&1; then
+        sleep 6
+        if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=12 -o BatchMode=yes -i "$SSH_KEY_PATH" "azureuser@$VM_IP" "echo 'SSH OK'" 2>/dev/null; then
+            echo -e "${GREEN}✓ SSH connectivity restored via run-command injection${NC}"
+        else
+            echo -e "${RED}❌ SSH still failing after injection${NC}"
+            echo "Diagnostics:"
+            echo "  az vm get-instance-view -n $VM_NAME -g $RG_NAME --query instanceView.statuses"
+            echo "  az network nsg show -g $RG_NAME -n ${VM_NAME}-nsg"
+            echo "Consider full rebuild: terraform apply -replace=azurerm_linux_virtual_machine.vm"
+            exit 1
+        fi
+    else
+        echo -e "${RED}❌ Failed run-command key injection${NC}"
+        echo "Check az login and permissions: az account show"
+        echo "Manual fix: 'az vm run-command invoke' with a simple echo of the key."
+        exit 1
+    fi
+else
+    echo -e "${GREEN}✓ SSH connectivity verified${NC}"
+fi
+
+echo -e "${GREEN}✓ Proceeding with agent configuration${NC}"
 
 # 2. Prepare Agent Script
 AGENT_NAME="dns-lab-agent-$(date +%s)"

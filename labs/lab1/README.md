@@ -1,4 +1,4 @@
-# DNS LAB 1: Connectivity Failure
+# Lab 1: Access Reliability Scenario
 
 ## 🎯 The Situation
 

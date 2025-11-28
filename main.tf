@@ -46,6 +46,24 @@ resource "azurerm_virtual_network" "vnet" {
   dns_servers = var.lab_scenario == "dns_exercise3" ? ["10.1.2.50"] : []
 }
 
+resource "azurerm_network_security_group" "subnet_nsg" {
+  name                = "nsg-subnet-agents"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+
+  security_rule {
+    name                       = "AllowSSH"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "22"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+}
+
 resource "azurerm_subnet" "subnet" {
   name                 = var.subnet_name
   resource_group_name  = azurerm_resource_group.rg.name
@@ -54,6 +72,11 @@ resource "azurerm_subnet" "subnet" {
   
   # Enable Private Endpoint policies
   private_endpoint_network_policies = "Enabled"
+}
+
+resource "azurerm_subnet_network_security_group_association" "subnet_nsg_assoc" {
+  subnet_id                 = azurerm_subnet.subnet.id
+  network_security_group_id = azurerm_network_security_group.subnet_nsg.id
 }
 
 # Key Vault
@@ -65,7 +88,7 @@ resource "azurerm_key_vault" "kv" {
   sku_name                    = "standard"
   soft_delete_retention_days  = 7
   purge_protection_enabled    = false
-  public_network_access_enabled = true # Needed for Terraform to seed secrets
+  public_network_access_enabled = true # Baseline allows Terraform to seed secrets; Lab 2 break script disables this
 
   access_policy {
     tenant_id = data.azurerm_client_config.current.tenant_id
@@ -83,6 +106,18 @@ resource "azurerm_key_vault" "kv" {
     secret_permissions = [
       "Get", "List", "Set", "Delete", "Recover", "Backup", "Restore", "Purge"
     ]
+  }
+
+  # Azure DevOps Service Connection principal (provided via variable) for pipeline secret retrieval
+  dynamic "access_policy" {
+    for_each = var.azure_devops_sp_object_id != "" ? [var.azure_devops_sp_object_id] : []
+    content {
+      tenant_id = data.azurerm_client_config.current.tenant_id
+      object_id = access_policy.value
+      secret_permissions = [
+        "Get", "List"
+      ]
+    }
   }
 }
 

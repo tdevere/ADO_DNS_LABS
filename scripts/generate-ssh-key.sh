@@ -13,6 +13,7 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
+FORCE="$1"
 echo -e "${GREEN}🔑 SSH Key Generation for DNS Lab${NC}\n"
 
 # Default key path
@@ -21,19 +22,23 @@ SSH_PUB_KEY_PATH="${SSH_KEY_PATH}.pub"
 
 # Check if key already exists
 if [ -f "$SSH_PUB_KEY_PATH" ]; then
-    echo -e "${YELLOW}⚠️  SSH key already exists at: $SSH_PUB_KEY_PATH${NC}"
-    echo ""
-    read -p "Do you want to overwrite it? (y/N): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo -e "${GREEN}✅ Using existing SSH key${NC}"
+    if [[ "$FORCE" == "--force" ]]; then
+        echo -e "${YELLOW}⚠️  --force specified, regenerating SSH key at: $SSH_PUB_KEY_PATH${NC}"
+    else
+        echo -e "${YELLOW}⚠️  SSH key already exists at: $SSH_PUB_KEY_PATH${NC}"
         echo ""
-        echo "Public key:"
-        cat "$SSH_PUB_KEY_PATH"
-        echo ""
-        exit 0
+        read -p "Do you want to overwrite it? (y/N): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo -e "${GREEN}✅ Using existing SSH key${NC}"
+            echo ""
+            echo "Public key:"
+            cat "$SSH_PUB_KEY_PATH"
+            echo ""
+            exit 0
+        fi
+        echo -e "${YELLOW}Overwriting existing key...${NC}"
     fi
-    echo -e "${YELLOW}Overwriting existing key...${NC}"
 fi
 
 # Ensure .ssh directory exists
