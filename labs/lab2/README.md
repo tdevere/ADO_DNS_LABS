@@ -73,9 +73,8 @@ To start this exercise, you will self-inject a fault into the environment to sim
    ```bash
    ./break-lab.sh lab2
    ```
-   *This removes the Virtual Network Link between the Agent VNet and the Private DNS Zone.*
 
-   > **Note:** Once this script finishes, switch your mindset. You are the on-call responder. The application team reports that they are suddenly connecting to the public endpoint instead of the private one.
+   > **Your Role:** Once this script finishes, you are the on-call engineer. The application team reports the deployment pipeline is failing with connectivity errors to Key Vault.
 
 2. **Verify the failure by running the pipeline:**
 
@@ -103,6 +102,51 @@ to have Get, List secret management permissions on the selected key vault..."
 Uploading /home/azureuser/azagent/_work/1/ProvisionKeyVaultPermissions.ps1 as attachment
 Finishing: Fetch Secrets from Key Vault
 ```
+
+---
+
+## 🔧 Breaking the Lab
+
+Run the break script to inject the fault:
+
+```bash
+./break-lab.sh lab2
+```
+
+**What happens next:**
+The infrastructure will be in a degraded state. Your job is to investigate why the pipeline fails and restore functionality.
+
+**Your Role:**
+You are the on-call engineer. The application team reports that the pipeline suddenly started failing with connectivity errors to Key Vault.
+
+---
+
+## 🔍 STEP 1: Reproduce the Issue
+
+Run the pipeline to observe the failure:
+
+1. Go to Azure DevOps: `https://dev.azure.com/<YOUR_ORG>/NetworkingLab/_build`
+2. Queue a new run of **DNS-Lab-Pipeline**
+3. Wait for it to fail
+
+**Expected Pipeline Output:**
+```
+Starting: Fetch Secrets from Key Vault
+==============================================================================
+Task         : Azure Key Vault
+Description  : Download Azure Key Vault secrets
+Version      : 2.259.2
+Author       : Microsoft Corporation
+Help         : https://docs.microsoft.com/azure/devops/pipelines/tasks/deploy/azure-key-vault
+==============================================================================
+SubscriptionId: fcfa67ae-efeb-417c-a966-48b4937d2918.
+Key vault name: kv-dns-lab-c56368d5.
+Downloading secret value for: TestSecret.
+##[error]
+TestSecret: "Public network access is disabled and request is not from a trusted service nor via an approved private link.
+```
+
+The error message mentions "public network access is disabled" but doesn't tell you *why* the agent is trying to use public network in the first place.
 
 ---
 
