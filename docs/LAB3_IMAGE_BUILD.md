@@ -56,6 +56,13 @@ Add the image ID to your `terraform.tfvars`:
 custom_dns_image_id = "/subscriptions/XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX/resourceGroups/rg-dns-lab-images/providers/Microsoft.Compute/images/dns-server-lab3-bind9"
 ```
 
+
+### Step 2: Publish to Azure Compute Gallery (for student access)
+
+If students will deploy from their own subscriptions, publish the managed image to an Azure Compute Gallery and share it.
+
+```bash
+# Example: publish the image (adjust values)
 ### Step 3: Deploy Lab 3
 
 ```bash
@@ -67,6 +74,9 @@ This will:
 - Configure the VNet to use `10.1.2.50` as its DNS server
 - Deploy the agent VM (which will use the custom DNS server)
 
+# Or share privately to specific subscriptions (no community sharing)
+./scripts/publish-image-to-gallery.sh \
+
 ## Image Configuration Details
 
 ### BIND9 Default Configuration (Broken State)
@@ -76,6 +86,13 @@ This will:
 ```
 options {
     directory "/var/cache/bind";
+```
+
+#### Students: How to consume the gallery image
+
+- You will receive a gallery image reference (image definition + version)
+- Terraform `custom_dns_image_id` can be set to the gallery image resource ID, or you can switch to using `source_image_id` in the VM block if preferred
+- Alternatively, use `cloud-init-dns.yaml` to build the DNS server on a stock Ubuntu image (no gallery needed)
     
     // Forward all queries to Google DNS (BROKEN)
     forwarders {
