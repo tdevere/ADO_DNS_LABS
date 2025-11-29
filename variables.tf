@@ -60,4 +60,10 @@ variable "azure_devops_sp_object_id" {
   default     = ""
 }
 
+variable "custom_dns_image_id" {
+  description = "Resource ID of the custom DNS server image for Lab 3"
+  type        = string
+  default     = ""
+}
+
 

@@ -39,5 +39,11 @@ terraform.tfvars.bak_*
 terraform_lab_key
 terraform_lab_key.pub
 
-# Hide Lab 3 for now
-labs/lab3/
+# Lab 3 image build artifacts (temporary - keep on feature branch only)
+# SSH keys generated during image build
+dns_image_builder_key
+dns_image_builder_key.pub
+.ssh/dns_image_builder_key*
+
+# Hide Lab 3 for now (will be removed when merging to main)
+# labs/lab3/

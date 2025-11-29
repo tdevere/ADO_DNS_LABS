@@ -1,0 +1,165 @@
+#cloud-config
+# Custom DNS Server Cloud-Init Configuration
+# This is used if deploying from a standard Ubuntu image instead of custom image
+
+package_update: true
+packages:
+  - bind9
+  - bind9utils
+  - bind9-doc
+  - dnsutils
+  - tcpdump
+  - net-tools
+  - curl
+  - git
+
+write_files:
+  - path: /etc/bind/named.conf.options
+    content: |
+      options {
+          directory "/var/cache/bind";
+          
+          // Forward all queries to Google DNS (BROKEN - won't resolve Azure privatelink)
+          forwarders {
+              8.8.8.8;
+              8.8.4.4;
+          };
+          
+          forward only;
+          
+          // Allow queries from any source
+          allow-query { any; };
+          
+          // Enable recursion
+          recursion yes;
+          
+          // Listen on all interfaces
+          listen-on { any; };
+          listen-on-v6 { any; };
+          
+          // DNSSEC validation
+          dnssec-validation auto;
+      };
+    owner: root:bind
+    permissions: '0644'
+
+  - path: /etc/bind/named.conf.local
+    content: |
+      // Query logging for troubleshooting
+      logging {
+          channel query_log {
+              file "/var/log/bind/query.log" versions 3 size 5m;
+              severity info;
+              print-time yes;
+              print-category yes;
+          };
+          category queries { query_log; };
+      };
+    owner: root:bind
+    permissions: '0644'
+
+  - path: /etc/bind/azure-privatelink.conf
+    content: |
+      // Azure Private Link DNS Forwarder
+      // Forwards privatelink queries to Azure DNS (168.63.129.16)
+      zone "privatelink.vaultcore.azure.net" {
+          type forward;
+          forward only;
+          forwarders { 168.63.129.16; };
+      };
+    owner: root:bind
+    permissions: '0644'
+
+  - path: /usr/local/bin/toggle-azure-dns.sh
+    content: |
+      #!/bin/bash
+      # Helper script to enable/disable Azure DNS forwarding
+      
+      set -e
+      
+      if [ "$EUID" -ne 0 ]; then 
+          echo "Please run as root (use sudo)"
+          exit 1
+      fi
+      
+      case "$1" in
+          enable)
+              echo "Enabling Azure DNS forwarding for privatelink zones..."
+              
+              # Check if already included
+              if grep -q "include \"/etc/bind/azure-privatelink.conf\";" /etc/bind/named.conf.local; then
+                  echo "Azure DNS forwarding is already enabled."
+                  exit 0
+              fi
+              
+              # Add include statement
+              echo '' >> /etc/bind/named.conf.local
+              echo '// Azure Private Link DNS Forwarding' >> /etc/bind/named.conf.local
+              echo 'include "/etc/bind/azure-privatelink.conf";' >> /etc/bind/named.conf.local
+              
+              # Restart BIND9
+              systemctl restart bind9
+              
+              echo "✅ Azure DNS forwarding enabled. BIND9 restarted."
+              echo "Test with: nslookup <your-keyvault>.vault.azure.net"
+              ;;
+              
+          disable)
+              echo "Disabling Azure DNS forwarding..."
+              
+              # Remove include statement
+              sed -i '/include "\/etc\/bind\/azure-privatelink.conf";/d' /etc/bind/named.conf.local
+              sed -i '/Azure Private Link DNS Forwarding/d' /etc/bind/named.conf.local
+              
+              # Restart BIND9
+              systemctl restart bind9
+              
+              echo "✅ Azure DNS forwarding disabled. BIND9 restarted."
+              ;;
+              
+          status)
+              if grep -q "include \"/etc/bind/azure-privatelink.conf\";" /etc/bind/named.conf.local; then
+                  echo "Azure DNS forwarding: ENABLED"
+              else
+                  echo "Azure DNS forwarding: DISABLED"
+              fi
+              
+              echo ""
+              echo "BIND9 status:"
+              systemctl status bind9 --no-pager | head -n 5
+              ;;
+              
+          *)
+              echo "Usage: $0 {enable|disable|status}"
+              echo ""
+              echo "  enable  - Forward privatelink queries to Azure DNS (168.63.129.16)"
+              echo "  disable - Revert to Google DNS for all queries"
+              echo "  status  - Check current configuration"
+              exit 1
+              ;;
+      esac
+    owner: root:root
+    permissions: '0755'
+
+runcmd:
+  # Create log directory
+  - mkdir -p /var/log/bind
+  - chown bind:bind /var/log/bind
+  
+  # Verify BIND configuration
+  - named-checkconf
+  
+  # Enable and start BIND9
+  - systemctl enable bind9
+  - systemctl restart bind9
+  
+  # Install GitHub CLI for Copilot
+  - curl -fsSL https://github.com/cli/cli/releases/download/v2.40.0/gh_2.40.0_linux_amd64.tar.gz | tar xz -C /usr/local --strip-components=1
+  
+  # Install Azure CLI
+  - curl -sL https://aka.ms/InstallAzureCLIDeb | bash
+  
+  # Display status
+  - systemctl status bind9 --no-pager
+
+final_message: "Custom DNS Server is ready! Use 'sudo /usr/local/bin/toggle-azure-dns.sh status' to check configuration."

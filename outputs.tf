@@ -56,3 +56,19 @@ output "vm_name" {
   value = azurerm_linux_virtual_machine.vm.name
   description = "Name of the agent virtual machine"
 }
+
+# Lab 3: Custom DNS Server Outputs
+output "dns_server_ip" {
+  value = var.lab_scenario == "dns_exercise3" && var.custom_dns_image_id != "" ? azurerm_network_interface.dns_nic[0].private_ip_address : null
+  description = "Private IP address of the custom DNS server (Lab 3 only)"
+}
+
+output "dns_server_vm_name" {
+  value = var.lab_scenario == "dns_exercise3" && var.custom_dns_image_id != "" ? azurerm_linux_virtual_machine.dns_vm[0].name : null
+  description = "Name of the custom DNS server VM (Lab 3 only)"
+}
+
+output "vnet_dns_servers" {
+  value = azurerm_virtual_network.vnet.dns_servers
+  description = "Configured DNS servers on the VNet"
+}

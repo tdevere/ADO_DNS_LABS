@@ -255,3 +255,55 @@ resource "azurerm_linux_virtual_machine" "vm" {
     ado_pool_name  = var.ado_pool_name
   }))
 }
+
+# ============================================
+# Lab 3: Custom DNS Server
+# ============================================
+
+# Network Interface for Custom DNS Server
+resource "azurerm_network_interface" "dns_nic" {
+  count               = var.lab_scenario == "dns_exercise3" && var.custom_dns_image_id != "" ? 1 : 0
+  name                = "nic-dns-server"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = azurerm_subnet.subnet.id
+    private_ip_address_allocation = "Static"
+    private_ip_address            = "10.1.2.50"
+  }
+}
+
+# Custom DNS Server VM (from pre-built image)
+resource "azurerm_linux_virtual_machine" "dns_vm" {
+  count               = var.lab_scenario == "dns_exercise3" && var.custom_dns_image_id != "" ? 1 : 0
+  name                = "vm-dns-server"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  size                = "Standard_B2s"
+  admin_username      = var.admin_username
+  
+  admin_ssh_key {
+    username   = var.admin_username
+    public_key = var.admin_ssh_key
+  }
+
+  disable_password_authentication = true
+  
+  network_interface_ids = [
+    azurerm_network_interface.dns_nic[0].id,
+  ]
+
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+  }
+
+  source_image_id = var.custom_dns_image_id
+
+  tags = {
+    Role = "CustomDNSServer"
+    Lab  = "Lab3"
+  }
+}
