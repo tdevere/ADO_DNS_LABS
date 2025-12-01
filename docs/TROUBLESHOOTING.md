@@ -2,9 +2,14 @@
 
 ## Common Issues
 
+### Pipeline & Service Connection Issues
+
 - **Pipeline validation error (ConnectedServiceName not found)**
   - Cause: Service connection name mismatch or not authorized.
-  - Fix: Ensure a service connection named `LabConnection` exists and is authorized for all pipelines.
+  - Fix: Re-run `./scripts/setup-pipeline.sh` to ensure the service connection is created and the pipeline.yml is updated with the correct dynamic name.
+  - Note: The setup script generates a unique service connection name per project (format: `SC-<ProjectName>-<Timestamp>`) to avoid org-wide naming conflicts.
+
+### Key Vault & DNS Issues
 
 - **Key Vault access fails**
   - `403 Forbidden` during curl is expected if not authenticated; SSL handshake success means network path is good.

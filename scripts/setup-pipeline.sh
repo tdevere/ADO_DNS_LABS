@@ -64,22 +64,34 @@ fi
 
 echo -e "${GREEN}✅ Key Vault: $KV_NAME${NC}"
 
-# 4. Update pipeline.yml with Key Vault name (only if placeholder present)
-echo -e "\n${BLUE}3️⃣  Updating pipeline.yml${NC}"
+# 4. Generate dynamic service connection name (unique per project to avoid org-wide conflicts)
+SERVICE_CONNECTION_NAME="SC-${ADO_PROJECT}-$(date +%s)"
+echo -e "\n${BLUE}3️⃣  Generated Service Connection Name: $SERVICE_CONNECTION_NAME${NC}"
+
+# 5. Update pipeline.yml with Key Vault name and Service Connection name
+echo -e "${BLUE}4️⃣  Updating pipeline.yml${NC}"
 if [ -f "pipeline.yml" ]; then
+    UPDATED=false
     if grep -q 'REPLACE_ME_WITH_KV_NAME' pipeline.yml; then
         sed -i "s/REPLACE_ME_WITH_KV_NAME/$KV_NAME/g" pipeline.yml
-        echo -e "${GREEN}✅ Inserted Key Vault name into pipeline.yml.${NC}"
+        UPDATED=true
+    fi
+    if grep -q 'REPLACE_ME_WITH_SC_NAME' pipeline.yml; then
+        sed -i "s/REPLACE_ME_WITH_SC_NAME/$SERVICE_CONNECTION_NAME/g" pipeline.yml
+        UPDATED=true
+    fi
+    if [ "$UPDATED" = true ]; then
+        echo -e "${GREEN}✅ Updated pipeline.yml with Key Vault and Service Connection names.${NC}"
     else
-        echo -e "${YELLOW}⏭️  pipeline.yml already configured (no placeholder found).${NC}"
+        echo -e "${YELLOW}⏭️  pipeline.yml already configured (no placeholders found).${NC}"
     fi
 else
     echo -e "${RED}❌ pipeline.yml not found.${NC}"
     exit 1
 fi
 
-# 5. Create or verify Azure Repos repository
-echo -e "\n${BLUE}4️⃣  Setting up Azure Repos Repository${NC}"
+# 6. Create or verify Azure Repos repository
+echo -e "\n${BLUE}5️⃣  Setting up Azure Repos Repository${NC}"
 REPO_NAME="ADO_DNS_LABS"
 
 # Check if repo exists
@@ -99,8 +111,8 @@ else
     echo -e "${GREEN}✅ Repository already exists.${NC}"
 fi
 
-# 6. Initialize and push to Azure Repos
-echo -e "\n${BLUE}5️⃣  Pushing Code to Azure Repos${NC}"
+# 7. Initialize and push to Azure Repos
+echo -e "\n${BLUE}6️⃣  Pushing Code to Azure Repos${NC}"
 
 # Initialize Git if needed
 if [ ! -d ".git" ]; then
@@ -139,9 +151,9 @@ else
 fi
 git config --unset core.hookspath || true
 
-# 7. Create Service Connection
-echo -e "\n${BLUE}6️⃣  Creating Service Connection${NC}"
-SERVICE_CONNECTION_NAME="LabConnection"
+# 8. Create Service Connection
+echo -e "\n${BLUE}7️⃣  Creating Service Connection${NC}"
+# SERVICE_CONNECTION_NAME already set dynamically above
 
 create_service_connection() {
     local name="$1"
@@ -211,10 +223,48 @@ EOF
     else
         if echo "$SC_RESPONSE" | grep -q 'DuplicateServiceConnectionException'; then
             echo -e "${YELLOW}⚠️ Service connection '$name' already exists (duplicate detected).${NC}"
+            # Try to find it in the current project first
             SERVICE_ENDPOINT_ID=$(az devops service-endpoint list \
                 --organization "$ADO_ORG_URL" \
                 --project "$ADO_PROJECT" \
                 --query "[?name=='$name'].id" -o tsv 2>/dev/null || echo "")
+
+            if [ -z "$SERVICE_ENDPOINT_ID" ]; then
+                echo -e "${YELLOW}⏭️  Not found in current project. Searching org for existing endpoint...${NC}"
+                # Search across the org via REST and try to link to this project
+                ORG_SC_MATCH=$(curl -s -u ":$ADO_PAT" "${ADO_ORG_URL}/_apis/serviceendpoint/endpoints?api-version=7.1-preview.4" | jq -r ".value[] | select(.name == \"$name\") | .id" 2>/dev/null || echo "")
+                if [ -n "$ORG_SC_MATCH" ]; then
+                    echo -e "${YELLOW}Found existing service endpoint ID in org: $ORG_SC_MATCH. Linking to project '${ADO_PROJECT}'...${NC}"
+                    LINK_PAYLOAD=$(cat <<EOF
+{
+  "name": "$name",
+  "serviceEndpointProjectReferences": [
+    {
+      "projectReference": { "name": "$ADO_PROJECT" },
+      "name": "$name"
+    }
+  ]
+}
+EOF
+)
+                    LINK_RESP=$(curl -s -X PATCH \
+                        -u ":$ADO_PAT" \
+                        -H "Content-Type: application/json" \
+                        -d "$LINK_PAYLOAD" \
+                        "${ADO_ORG_URL}/_apis/serviceendpoint/endpoints/$ORG_SC_MATCH?api-version=7.1-preview.4")
+                    SERVICE_ENDPOINT_ID=$(echo "$LINK_RESP" | jq -r '.id' 2>/dev/null || echo "")
+                    if [ -n "$SERVICE_ENDPOINT_ID" ] && [ "$SERVICE_ENDPOINT_ID" != "null" ]; then
+                        echo -e "${GREEN}✅ Linked existing endpoint to project (ID: $SERVICE_ENDPOINT_ID).${NC}"
+                    else
+                        echo -e "${YELLOW}⚠️ Linking may require manual approval in ADO UI.${NC}"
+                        echo "Open: ${ADO_ORG_URL}/${ADO_PROJECT}/_settings/adminservices and approve/use '$name'."
+                    fi
+                else
+                    echo -e "${RED}❌ Duplicate reported but no matching endpoint found in org by name '$name'.${NC}"
+                    echo "Please check other projects for a similarly named connection and either delete or rename it, then re-run."
+                    exit 1
+                fi
+            fi
         else
             echo -e "${RED}❌ Failed to create service connection '$name'.${NC}"
             echo "Response: $SC_RESPONSE"
@@ -227,37 +277,17 @@ EOF
     fi
 }
 
-# Enforce single canonical connection name
+# Check if service connection already exists
 EXISTING_SC=$(az devops service-endpoint list \
     --organization "$ADO_ORG_URL" \
     --project "$ADO_PROJECT" \
     --query "[?name=='$SERVICE_CONNECTION_NAME'].id" -o tsv 2>/dev/null || echo "")
-OTHER_SC=$(az devops service-endpoint list \
-    --organization "$ADO_ORG_URL" \
-    --project "$ADO_PROJECT" \
-    --query "[?name=='AzureLabConnection'].id" -o tsv 2>/dev/null || echo "")
 
 if [ -n "$EXISTING_SC" ]; then
-    echo -e "${GREEN}✅ Canonical service connection '$SERVICE_CONNECTION_NAME' exists.${NC}"
+    echo -e "${GREEN}✅ Service connection '$SERVICE_CONNECTION_NAME' already exists.${NC}"
     SERVICE_ENDPOINT_ID="$EXISTING_SC"
 else
-    if [ -n "$OTHER_SC" ]; then
-        echo -e "${RED}❌ Found non-standard service connection 'AzureLabConnection' but missing required '$SERVICE_CONNECTION_NAME'.${NC}"
-        echo "Please either:"
-        echo "  a) Rename 'AzureLabConnection' to '$SERVICE_CONNECTION_NAME' in Azure DevOps UI, OR"
-        echo "  b) Delete it and re-run this script, OR"
-        echo "  c) Allow this script to create the correct one now."
-        read -p "Create new '$SERVICE_CONNECTION_NAME'? (Y/n): " ANSWER
-        ANSWER=${ANSWER:-Y}
-        if [[ "$ANSWER" =~ ^[Yy]$ ]]; then
-            create_service_connection "$SERVICE_CONNECTION_NAME"
-        else
-            echo "Aborting until canonical connection is in place."
-            exit 1
-        fi
-    else
-        create_service_connection "$SERVICE_CONNECTION_NAME"
-    fi
+    create_service_connection "$SERVICE_CONNECTION_NAME"
 fi
 
 # Authorize Service Connection for all pipelines and grant Key Vault access
@@ -267,18 +297,36 @@ if [ -n "$SERVICE_ENDPOINT_ID" ] && [ "$SERVICE_ENDPOINT_ID" != "null" ]; then
         --id "$SERVICE_ENDPOINT_ID" \
         --enable-for-all true \
         --organization "$ADO_ORG_URL" \
-        --project "$ADO_PROJECT" >/dev/null 2>&1
-    echo -e "${GREEN}✅ Service Connection authorized.${NC}"
+        --project "$ADO_PROJECT" >/dev/null 2>&1 || true
+
+    # Some connections require manual approval; surface clear guidance
+    APPROVAL_STATE=$(az devops service-endpoint show \
+        --id "$SERVICE_ENDPOINT_ID" \
+        --organization "$ADO_ORG_URL" \
+        --project "$ADO_PROJECT" \
+        --query "isReady" -o tsv 2>/dev/null || echo "")
+    if [ "$APPROVAL_STATE" != "True" ] && [ "$APPROVAL_STATE" != "true" ]; then
+        echo -e "${YELLOW}⚠️ Service connection pending approval. Please approve it in ADO UI.${NC}"
+        echo "Open: ${ADO_ORG_URL}/${ADO_PROJECT}/_settings/adminservices and approve '$SERVICE_CONNECTION_NAME'."
+    else
+        echo -e "${GREEN}✅ Service Connection authorized for use.${NC}"
+    fi
 
     # Grant Key Vault permissions
     echo "Granting Key Vault access to Service Connection..."
     
-    # Get Service Principal ID from the connection
+    # Get Service Principal ID from the connection (try different query paths)
     SP_ID=$(az devops service-endpoint show \
         --id "$SERVICE_ENDPOINT_ID" \
         --organization "$ADO_ORG_URL" \
         --project "$ADO_PROJECT" \
         --query "authorization.parameters.serviceprincipalid" -o tsv 2>/dev/null || echo "")
+    
+    # Fallback: use the APP_ID from creation if SP_ID query failed
+    if [ -z "$SP_ID" ] && [ -n "$APP_ID" ]; then
+        echo -e "${YELLOW}Using Service Principal from creation: $APP_ID${NC}"
+        SP_ID="$APP_ID"
+    fi
     
     if [ -n "$SP_ID" ]; then
         echo "Service Principal ID: $SP_ID"
@@ -322,12 +370,12 @@ if [ -n "$SERVICE_ENDPOINT_ID" ] && [ "$SERVICE_ENDPOINT_ID" != "null" ]; then
         fi
     else
         echo -e "${RED}❌ Could not retrieve Service Principal ID from Service Connection.${NC}"
-        echo "Please manually grant Key Vault access to the Service Principal used by the 'LabConnection' service connection."
+        echo "Please manually grant Key Vault access to the Service Principal used by '$SERVICE_CONNECTION_NAME'."
     fi
 fi
 
-# 8. Create Pipeline
-echo -e "\n${BLUE}7️⃣  Creating Pipeline${NC}"
+# 9. Create Pipeline
+echo -e "\n${BLUE}8️⃣  Creating Pipeline${NC}"
 PIPELINE_NAME="DNS-Lab-Pipeline"
 
 # Check if pipeline already exists
@@ -390,7 +438,7 @@ echo -e "${BLUE}╔════════════════════�
 echo -e "${BLUE}║              Pipeline Setup Complete! 🎉                   ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
 echo ""
-echo -e "${GREEN}✅ Service Connection: $SERVICE_CONNECTION_NAME${NC}"
+echo -e "${GREEN}✅ Service Connection: $SERVICE_CONNECTION_NAME (dynamically generated)${NC}"
 echo -e "${GREEN}✅ Repository: $REPO_NAME${NC}"
 echo -e "${GREEN}✅ Pipeline: $PIPELINE_NAME${NC}"
 echo ""
