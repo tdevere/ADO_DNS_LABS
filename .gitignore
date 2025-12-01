@@ -47,3 +47,9 @@ dns_image_builder_key.pub
 
 # Hide Lab 3 for now (will be removed when merging to main)
 # labs/lab3/
+
+# Terraform plan files
+plan-*
+
+# Temporary notes
+deleteme.md
