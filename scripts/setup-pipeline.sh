@@ -161,6 +161,7 @@ create_service_connection() {
     
     # Create service principal for the service connection
     SP_NAME="sp-ado-lab-$(date +%s)"
+    echo "Creating service principal: $SP_NAME"
     SP_OUTPUT=$(az ad sp create-for-rbac \
         --name "$SP_NAME" \
         --role Contributor \
@@ -170,14 +171,20 @@ create_service_connection() {
     APP_ID=$(echo "$SP_OUTPUT" | jq -r '.appId')
     SP_PASSWORD=$(echo "$SP_OUTPUT" | jq -r '.password')
     
+    echo "Service Principal App ID: $APP_ID"
+    
     # Wait for service principal propagation
     echo "Waiting for service principal to propagate..."
-    sleep 10
+    sleep 15
     
-    # Create service connection using REST API
-        SERVICE_CONNECTION_JSON=$(cat <<EOF
+    # Get Project ID for robust reference
+    PROJECT_ID=$(az devops project show --project "$ADO_PROJECT" --organization "$ADO_ORG_URL" --query id -o tsv)
+    
+    # Create service connection configuration file
+    SC_CONFIG_FILE="sc_config_$(date +%s).json"
+    cat <<EOF > "$SC_CONFIG_FILE"
 {
-    "name": "$name",
+  "name": "$name",
   "type": "azurerm",
   "url": "https://management.azure.com/",
   "authorization": {
@@ -201,26 +208,47 @@ create_service_connection() {
   "serviceEndpointProjectReferences": [
     {
       "projectReference": {
+        "id": "$PROJECT_ID",
         "name": "$ADO_PROJECT"
       },
-            "name": "$name"
+      "name": "$name"
     }
   ]
 }
 EOF
-)
+
+    echo "Creating service endpoint via Azure DevOps CLI..."
+    # Use the generic create command which takes the JSON config (including the key)
+    # This avoids interactive prompts while using the robust CLI client
+    SC_RESPONSE=$(az devops service-endpoint create \
+        --service-endpoint-configuration "$SC_CONFIG_FILE" \
+        --organization "$ADO_ORG_URL" \
+        --project "$ADO_PROJECT" \
+        --output json 2>&1)
     
-    SC_RESPONSE=$(curl -s -X POST \
-        -u ":$ADO_PAT" \
-        -H "Content-Type: application/json" \
-        -d "$SERVICE_CONNECTION_JSON" \
-        "${ADO_ORG_URL}/${ADO_PROJECT}/_apis/serviceendpoint/endpoints?api-version=7.1-preview.4")
+    # Clean up config file immediately to protect secrets
+    rm -f "$SC_CONFIG_FILE"
+    
+    # Debug: show response (truncated)
+    echo "CLI Response (first 500 chars): ${SC_RESPONSE:0:500}"
     
     SERVICE_ENDPOINT_ID=$(echo "$SC_RESPONSE" | jq -r '.id' 2>/dev/null || echo "")
     
-    if [ -n "$SERVICE_ENDPOINT_ID" ] && [ "$SERVICE_ENDPOINT_ID" != "null" ]; then
+    # Check if response contains an error
+    if echo "$SC_RESPONSE" | grep -q "ERROR:"; then
+        ERROR_MSG="$SC_RESPONSE"
+    else
+        ERROR_MSG=$(echo "$SC_RESPONSE" | jq -r '.message' 2>/dev/null || echo "")
+    fi
+    
+    if [ -n "$SERVICE_ENDPOINT_ID" ] && [ "$SERVICE_ENDPOINT_ID" != "null" ] && [ -z "$ERROR_MSG" -o "$ERROR_MSG" == "null" ]; then
         echo -e "${GREEN}✅ Service Connection created (ID: $SERVICE_ENDPOINT_ID).${NC}"
     else
+        # Show error if present
+        if [ -n "$ERROR_MSG" ] && [ "$ERROR_MSG" != "null" ]; then
+            echo -e "${RED}API Error: $ERROR_MSG${NC}"
+        fi
+        
         if echo "$SC_RESPONSE" | grep -q 'DuplicateServiceConnectionException'; then
             echo -e "${YELLOW}⚠️ Service connection '$name' already exists (duplicate detected).${NC}"
             # Try to find it in the current project first
