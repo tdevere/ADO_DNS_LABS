@@ -415,8 +415,12 @@ else
     create_service_connection "$SERVICE_CONNECTION_NAME"
 fi
 
+echo "[DEBUG] After SC selection: SERVICE_ENDPOINT_ID='$SERVICE_ENDPOINT_ID' (length: ${#SERVICE_ENDPOINT_ID})"
+echo "[DEBUG] Condition check: [ -n '$SERVICE_ENDPOINT_ID' ] && [ '$SERVICE_ENDPOINT_ID' != 'null' ]"
+
 # Authorize Service Connection for all pipelines and grant Key Vault access
 if [ -n "$SERVICE_ENDPOINT_ID" ] && [ "$SERVICE_ENDPOINT_ID" != "null" ]; then
+    echo "[DEBUG] Entering authorization section"
     echo "[DEBUG] SERVICE_ENDPOINT_ID: $SERVICE_ENDPOINT_ID"
     echo "Authorizing service connection for all pipelines..."
     echo "[DEBUG] Running: az devops service-endpoint update with timeout 30s"
