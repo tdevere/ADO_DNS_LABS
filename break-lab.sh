@@ -85,7 +85,17 @@ case $LAB_ID in
     lab3)
         echo "Injecting Lab 3 fault (custom DNS server)..."
         silent az network vnet update --resource-group "$RG_NAME" --name "$VNET_NAME" --dns-servers 10.1.2.50
-        echo "✅ Lab 3 fault injected. Begin troubleshooting."
+        
+        echo "✅ Lab 3 fault injected."
+        echo ""
+        echo "⚠️  The agent will go offline because it can't resolve dev.azure.com"
+        echo "   This is EXPECTED! Students will troubleshoot DNS resolution."
+        echo ""
+        echo "   To diagnose: SSH to the VM and run:"
+        echo "     nslookup dev.azure.com"
+        echo "     curl -I https://dev.azure.com/ADOTrainingLab/"
+        echo ""
+        echo "   To restore: ./fix-lab.sh lab3"
         ;;
     *)
         echo "❌ Invalid Lab ID. Use lab1, lab2, or lab3."; exit 1

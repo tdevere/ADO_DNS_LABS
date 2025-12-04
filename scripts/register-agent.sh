@@ -162,20 +162,34 @@ fi
 # Check if already configured
 if [ -f ".agent" ]; then
     echo "Agent already configured. Removing old config..."
-    sudo ./svc.sh stop || true
-    sudo ./svc.sh uninstall || true
-    ./config.sh remove --auth pat --token "$ADO_PAT" || true
+    
+    # Find and stop all agent services
+    for svc in /etc/systemd/system/vsts.agent.*.service; do
+        if [ -f "\$svc" ]; then
+            sudo systemctl stop "\$(basename \$svc)" 2>/dev/null || true
+            sudo systemctl disable "\$(basename \$svc)" 2>/dev/null || true
+            sudo rm -f "\$svc" || true
+        fi
+    done
+    sudo systemctl daemon-reload || true
+    
+    # Force local removal without contacting Azure DevOps
+    # (useful when DNS is broken and we can't reach dev.azure.com)
+    rm -f .agent .credentials .credentials_rsaparams .runner .path .env .service || true
+    rm -rf _diag _work || true
+    
+    echo "Old agent removed locally. Proceeding with fresh registration..."
 fi
 
 # Configure
 echo "--> Running config.sh..."
-./config.sh --unattended \
+echo "Y" | ./config.sh --unattended \
   --url "$ADO_ORG_URL" \
   --auth pat --token "$ADO_PAT" \
   --pool "$ADO_POOL" \
   --agent "$AGENT_NAME" \
   --replace \
-  --acceptTeeEula
+  --acceptteeeula
 
 # Install and Start Service
 echo "--> Installing Service..."

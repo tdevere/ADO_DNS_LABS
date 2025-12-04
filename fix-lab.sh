@@ -61,3 +61,14 @@ fi
 
 echo "✅ Lab $LAB_ID is now FIXED. Configuration restored to base state."
 echo "   Run the pipeline or check 'nslookup' to verify success."
+
+# For Lab 3 specifically, the agent should come back online automatically
+if [ "$LAB_ID" == "lab3" ]; then
+    echo ""
+    echo "⏳ Waiting 30 seconds for agent to reconnect with restored DNS..."
+    sleep 30
+    echo "✅ Agent should now be online. Check the agent pool in Azure DevOps."
+    echo ""
+    echo "   If the agent is still offline, it may have died during the DNS outage."
+    echo "   Restart it by running: ./scripts/register-agent.sh"
+fi

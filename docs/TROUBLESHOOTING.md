@@ -9,6 +9,11 @@
   - Fix: Re-run `./scripts/setup-pipeline.sh` to ensure the service connection is created and the pipeline.yml is updated with the correct dynamic name.
   - Note: The setup script generates a unique service connection name per project (format: `SC-<ProjectName>-<Timestamp>`) to avoid org-wide naming conflicts.
 
+- **Service connection creation fails silently**
+  - Cause: PAT lacks required scopes.
+  - Fix: Ensure `.ado.env` PAT has scopes: `Agent Pools (read, manage)` and `Service Connections (read, query & manage)`.
+  - Tip: Rotate the PAT if expired and re-run `./scripts/setup-pipeline.sh`.
+
 ### Key Vault & DNS Issues
 
 - **Key Vault access fails**

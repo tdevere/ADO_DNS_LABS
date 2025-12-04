@@ -1,29 +1,22 @@
-# Lab 3: Custom DNS Misconfiguration
+# Lab 3: The Silent Agent Outage
 
 ## 🎯 The Situation
 
 **Wednesday, 2:00 PM: The Call 📞**
 
-Your team takes a **Priority 1** call. The application team reports that their deployment pipeline is suddenly failing to retrieve secrets from Azure Key Vault. They swear their pipeline YAML and Key Vault permissions haven't changed.
+Your team takes a **Priority 1** call. The CI/CD team reports that their self-hosted build agents have suddenly gone offline. They can't run any deployments.
 
-"We think it's a network issue," they say. "We heard the networking team made some DNS changes this afternoon."
+"We haven't touched the agent configuration," they insist. "They were working fine this morning. Now they just show 'Offline' in Azure DevOps."
 
-**What the application team tells you:**
-- "Our pipeline worked fine yesterday afternoon"
-- "Nothing changed in our YAML or Key Vault permissions"
-- "We heard there was some network maintenance this morning"
-- "The agent can reach the internet - we tested with `curl google.com`"
+**What the CI/CD team tells you:**
+- "All agents in the `DNS-Lab-Pool` are offline."
+- "We can't even queue a build to debug it."
+- "We heard the networking team deployed a new 'security-hardened' DNS solution this afternoon."
 
-**What you observe in the pipeline log:**
-```
-##[error]TestSecret: "Public network access is disabled and request is not from a trusted 
-service nor via an approved private link."
-```
-
-**Your mission:** You're the support engineer. The application team can't access Azure infrastructure - only pipeline logs. You need to investigate the networking changes, determine what broke, and coordinate a fix with the networking team.
+**Your mission:** You're the support engineer. The agents are down, so you can't use pipeline logs to troubleshoot. You need to SSH into the agent VM, investigate why it lost connectivity to Azure DevOps, and determine if the new DNS solution is to blame.
 
 > **Real-World Context**
-> Many organizations deploy custom DNS servers (BIND, Windows DNS, Infoblox) for policy enforcement, logging, and hybrid connectivity. When Private Link resolution fails but internet DNS works fine, the root cause is often in the custom DNS configuration. The challenge? Error messages don't mention DNS at all—they surface as connectivity or permission failures. This scenario is surprisingly common in enterprise Azure environments.
+> Self-hosted agents rely on DNS to reach `dev.azure.com`. When organizations switch to custom DNS servers (BIND, Windows DNS, Infoblox) without configuring proper forwarding for public Azure endpoints, agents lose connectivity instantly. This manifests as a "silent outage"—no error logs in the portal, just offline agents.
 
 ---
 
@@ -52,23 +45,14 @@ terraform apply -var="lab_scenario=base" \
 
 **3. Register the self-hosted agent:**
 ```bash
-# SSH to the agent VM
-VM_IP=$(terraform output -raw vm_public_ip)
-ssh azureuser@$VM_IP
-
-# On the agent VM, run:
-./register-agent.sh
+# This script registers the agent and ensures it's online
+./scripts/register-agent.sh
 ```
-
-Wait for the agent to appear in your Azure DevOps agent pool (DNS-Lab-Pool).
 
 **4. Set up the Azure DevOps pipeline:**
 ```bash
-# Back in your Codespace
 ./scripts/setup-pipeline.sh
 ```
-
-This creates the pipeline in Azure DevOps with the correct Key Vault configuration.
 
 **5. Verify the pipeline works:**
 - Go to Azure DevOps → Pipelines
@@ -77,10 +61,9 @@ This creates the pipeline in Azure DevOps with the correct Key Vault configurati
 
 ### Before Starting This Lab
 
-1. ✅ Complete Labs 1 and 2 (recommended for understanding progression)
-2. ✅ Base infrastructure deployed and working
-3. ✅ Agent registered and online in Azure DevOps
-4. ✅ Pipeline successfully runs in base state
+1. ✅ Base infrastructure deployed and working
+2. ✅ Agent registered and online in Azure DevOps
+3. ✅ Pipeline successfully runs in base state
 
 **Quick verification:**
 ```bash
@@ -176,51 +159,140 @@ Run the break script to simulate the networking team's DNS changes:
 ./break-lab.sh lab3
 ```
 
-⏳ **Wait 2-3 minutes** for the infrastructure changes to complete.
+**What just happened?**
+- The script updated the VNet to use a custom DNS server (10.1.2.50).
+- **The agent went offline.**
+- You can no longer run pipelines.
 
-### Step 2: Observe the Pipeline Failure
+### Step 2: Observe the Failure
 
-Trigger your pipeline in Azure DevOps. You'll see this error in the "Fetch Secrets from Key Vault" step:
-
-```
-##[error]TestSecret: "Public network access is disabled and request is not from a trusted 
-service nor via an approved private link.
-Caller: appid=***;oid=...
-Vault: kv-dns-lab-xxxxxxxx;location=westus2."
-```
+1. Go to **Azure DevOps** → **Project Settings** → **Agent Pools** → **DNS-Lab-Pool**.
+2. Observe that your agent is **Offline**.
+3. Try to queue a pipeline run. It will sit in "Queued" state indefinitely.
 
 **Key observation:** 
-- The error says "public network access is disabled"
-- This implies the agent is trying to reach the **public** endpoint
-- But why? The private endpoint exists...
-
-> **Note:** The error message does **not** mention DNS. This is the challenge—DNS misconfiguration surfaces as a connectivity or permissions error.
+- This isn't a pipeline error—it's an infrastructure outage.
+- The agent can't talk to Azure DevOps at all.
+- Since Azure DevOps is a public service (`dev.azure.com`), this means the agent can't resolve public DNS names correctly.
 
 ---
 
 ## 🔍 Investigation: Systematic Troubleshooting
 
-This is the same process you'll use on the job when DNS issues are suspected. Work through each step—don't skip ahead.
+Since the agent is offline, you can't use pipeline logs. You must investigate from the VM itself.
+
+### STEP 1: Access the Agent VM
+
+Use the SSH key provided in the lab environment:
+
+```bash
+# Get the VM's public IP
+VM_IP=$(terraform output -raw vm_public_ip)
+
+# SSH into the VM
+ssh azureuser@$VM_IP
+```
+
+### STEP 2: Verify Connectivity
+
+Once inside the VM, check if you can reach Azure DevOps.
+
+**1. Test DNS resolution:**
+```bash
+nslookup dev.azure.com
+```
+*Does it return an IP address? Or does it time out/fail?*
+
+**2. Test HTTP connectivity:**
+```bash
+curl -I https://dev.azure.com/ADOTrainingLab/
+```
+*Does it connect? Or do you get "Could not resolve host"?*
+
+**3. Check DNS configuration:**
+```bash
+cat /etc/resolv.conf
+```
+*What nameserver is the VM using? Is it the custom DNS server (10.1.2.50)?*
 
 ---
 
-### STEP 1: Scope the Problem
+### STEP 3: Investigate the Custom DNS Server
 
-Before investigating DNS configurations, understand the failure context.
+Now that you know the VM is using `10.1.2.50` and failing to resolve names, let's look at that server.
 
-**Discovery questions:**
+**1. Test the custom DNS server directly:**
+```bash
+dig @10.1.2.50 dev.azure.com
+```
+*Does the server answer? If not, is it even running?*
 
-1. **What changed recently?**
-   - Review the ticket: What did the networking team deploy?
-   - When did the failure start?
-   - Did the pipeline work before this change?
+**2. Test the custom DNS server with a known public domain:**
+```bash
+dig @10.1.2.50 google.com
+```
+*Does it forward queries to the internet?*
 
-2. **What's the actual error?**
-   - Read the pipeline failure message carefully
-   - Does it mention DNS? Network? Permissions?
-   - What does "public network access is disabled" suggest?
+**Discovery:**
+The custom DNS server is configured to be an authoritative-only server for internal zones. It has **no forwarders** configured for public domains. This means it drops any query for `dev.azure.com`, `github.com`, or `microsoft.com`.
 
-3. **What infrastructure exists?**
+Without public DNS resolution, the agent cannot:
+- Connect to Azure DevOps to get jobs
+- Download artifacts
+- Reach Azure Key Vault (public endpoint)
+
+---
+
+## 🛠️ Fix the Issue
+
+You have identified the root cause: **The custom DNS server is missing forwarders.**
+
+### Option 1: Fix the DNS Server (The "Right" Fix)
+
+In a real scenario, you would ask the networking team to configure forwarding on their BIND server. Since you don't have access to the DNS server VM in this lab, we will simulate the fix by reverting to Azure DNS.
+
+### Option 2: Revert to Azure DNS (The Lab Fix)
+
+To restore service immediately, we will revert the VNet configuration to use Azure's default DNS.
+
+**1. Run the fix script:**
+```bash
+# Run this from your Codespace (not the agent VM)
+./fix-lab.sh lab3
+```
+
+**2. Verify the fix:**
+- Wait 30 seconds for the agent to reconnect.
+- Check Azure DevOps → Agent Pools. Is the agent **Online**?
+- Run the pipeline again. Does it succeed?
+
+---
+
+## 🧠 Reflection
+
+1. **Why did the agent go offline?**
+   - The agent polls `dev.azure.com` to ask for work.
+   - When DNS broke, it couldn't resolve the URL, so it couldn't connect.
+
+2. **Why didn't we see an error in the pipeline logs?**
+   - Because the pipeline never started! The agent couldn't pick up the job.
+
+3. **How would you prevent this in production?**
+   - **Monitoring:** Alert on agent offline status.
+   - **DNS Redundancy:** Configure a secondary DNS server (e.g., Azure DNS `168.63.129.16`) as a backup in the VNet settings.
+   - **Hybrid DNS:** Ensure custom DNS servers have proper forwarders to Azure DNS or public resolvers (8.8.8.8).
+
+---
+
+## 🧹 Cleanup
+
+When you're done with the lab, destroy the infrastructure to save costs:
+
+```bash
+./scripts/cleanup.sh
+```
+
+```
    - Does the Key Vault have a private endpoint? (Check Azure portal)
    - Is the private endpoint "Approved"?
    - What DNS server is the VNet configured to use?
