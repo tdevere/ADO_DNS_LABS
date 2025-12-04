@@ -50,3 +50,6 @@ dns_image_builder_key.pub
 
 # Terraform plan files
 plan-*
+
+# Setup log (runtime generated)
+setup.log
