@@ -65,25 +65,6 @@ Removes Azure DevOps project, pipelines, service connections, agent pool, and al
 
 ---
 
-## ✅ Validation (Automated)
-The setup script runs validation automatically. To re-run validation at any time:
-```bash
-./scripts/validate-base.sh
-```
-Confirms:
-- Private DNS resolves `<kv>.vault.azure.net` to `10.1.2.x`
-- TLS handshake to Key Vault (403 is fine—auth not required for DNS test)
-
-Manual spot checks:
-```bash
-KV_NAME=$(terraform output -raw key_vault_name)
-VM_IP=$(terraform output -raw vm_public_ip)
-ssh -i ~/.ssh/terraform_lab_key azureuser@"$VM_IP" "nslookup ${KV_NAME}.vault.azure.net"
-ssh -i ~/.ssh/terraform_lab_key azureuser@"$VM_IP" "curl -sv https://${KV_NAME}.vault.azure.net" | true
-```
-
----
-
 ## 🧪 Modules
 
 | Module | Description |
