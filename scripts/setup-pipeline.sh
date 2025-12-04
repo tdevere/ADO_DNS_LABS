@@ -198,8 +198,77 @@ else
 fi
 git config --unset core.hookspath || true
 
-# 8. Create Service Connection
-echo -e "\n${BLUE}8️⃣  Creating Service Connection${NC}"
+# 8. Create Pipeline (AFTER pipeline.yml is updated and pushed)
+echo -e "\n${BLUE}8️⃣  Creating Pipeline${NC}"
+PIPELINE_NAME="DNS-Lab-Pipeline"
+
+# Check if pipeline already exists
+EXISTING_PIPELINE=$(az pipelines list \
+    --organization "$ADO_ORG_URL" \
+    --project "$ADO_PROJECT" \
+    --query "[?name=='$PIPELINE_NAME'].id" -o tsv 2>/dev/null || echo "")
+
+if [ -n "$EXISTING_PIPELINE" ]; then
+    echo -e "${YELLOW}⚠️  Pipeline '$PIPELINE_NAME' already exists (ID: $EXISTING_PIPELINE).${NC}"
+    PIPELINE_ID="$EXISTING_PIPELINE"
+    # Optional: queue a run to surface agent availability issues early
+    echo -e "${BLUE}🔄 Queuing a pipeline run to verify agent availability...${NC}"
+    if az pipelines run --id "$PIPELINE_ID" --organization "$ADO_ORG_URL" --project "$ADO_PROJECT" >/dev/null 2>&1; then
+        echo -e "${GREEN}✅ Pipeline run queued.${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Unable to auto-queue run (permissions or agent missing). You can trigger manually in the UI.${NC}"
+    fi
+else
+    echo -e "${YELLOW}Creating pipeline '$PIPELINE_NAME'...${NC}"
+    
+    # First, delete any old pipelines with conflicting names to avoid stale definitions
+    echo "Checking for existing pipelines to clean up..."
+    OLD_PIPELINES=$(az pipelines list --organization "$ADO_ORG_URL" --project "$ADO_PROJECT" --query "[?name=='$PIPELINE_NAME'].id" -o tsv 2>/dev/null || echo "")
+    if [ -n "$OLD_PIPELINES" ]; then
+        while IFS= read -r OLD_ID; do
+            if [ -n "$OLD_ID" ]; then
+                echo "  Removing old pipeline (ID: $OLD_ID)..."
+                az pipelines delete --organization "$ADO_ORG_URL" --project "$ADO_PROJECT" --id "$OLD_ID" --yes 2>/dev/null || true
+            fi
+        done <<< "$OLD_PIPELINES"
+    fi
+    
+    # Create pipeline using Azure CLI
+    # Capture output and error
+    PIPELINE_OUTPUT=$(az pipelines create \
+        --name "$PIPELINE_NAME" \
+        --repository "ADO_DNS_LABS" \
+        --repository-type tfsgit \
+        --branch main \
+        --yml-path "/pipeline.yml" \
+        --organization "$ADO_ORG_URL" \
+        --project "$ADO_PROJECT" \
+        --output json 2>&1)
+    
+    # Extract ID if successful (check if output is valid JSON and has id)
+    PIPELINE_ID=$(echo "$PIPELINE_OUTPUT" | jq -r '.id' 2>/dev/null || echo "")
+    
+    if [ -n "$PIPELINE_ID" ] && [ "$PIPELINE_ID" != "null" ]; then
+        echo -e "${GREEN}✅ Pipeline created (ID: $PIPELINE_ID).${NC}"
+        echo -e "${YELLOW}ℹ️  Pipeline is set to 'trigger: none' - it will not run automatically.${NC}"
+        echo -e "${YELLOW}    Students can manually trigger it when ready for testing.${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Could not create pipeline automatically.${NC}"
+        echo -e "${RED}Error details:${NC}"
+        echo "$PIPELINE_OUTPUT"
+        echo ""
+        echo "Please create it manually:"
+        echo "1. Go to: ${ADO_ORG_URL}/${ADO_PROJECT}/_build"
+        echo "2. Click 'New pipeline'"
+        echo "3. Select 'Azure Repos Git'"
+        echo "4. Select 'ADO_DNS_LABS' repository"
+        echo "5. Select 'Existing Azure Pipelines YAML file'"
+        echo "6. Path: /pipeline.yml"
+    fi
+fi
+
+# 9. Create Service Connection
+echo -e "\n${BLUE}9️⃣  Creating Service Connection${NC}"
 # SERVICE_CONNECTION_NAME already set dynamically above
 
 create_service_connection() {
@@ -505,75 +574,6 @@ if [ -n "$SERVICE_ENDPOINT_ID" ] && [ "$SERVICE_ENDPOINT_ID" != "null" ]; then
     else
         echo -e "${RED}❌ Could not retrieve Service Principal ID from Service Connection.${NC}"
         echo "Please manually grant Key Vault access to the Service Principal used by '$SERVICE_CONNECTION_NAME'."
-    fi
-fi
-
-# 9. Create Pipeline
-echo -e "\n${BLUE}9️⃣  Creating Pipeline${NC}"
-PIPELINE_NAME="DNS-Lab-Pipeline"
-
-# Check if pipeline already exists
-EXISTING_PIPELINE=$(az pipelines list \
-    --organization "$ADO_ORG_URL" \
-    --project "$ADO_PROJECT" \
-    --query "[?name=='$PIPELINE_NAME'].id" -o tsv 2>/dev/null || echo "")
-
-if [ -n "$EXISTING_PIPELINE" ]; then
-    echo -e "${YELLOW}⚠️  Pipeline '$PIPELINE_NAME' already exists (ID: $EXISTING_PIPELINE).${NC}"
-    PIPELINE_ID="$EXISTING_PIPELINE"
-    # Optional: queue a run to surface agent availability issues early
-    echo -e "${BLUE}🔄 Queuing a pipeline run to verify agent availability...${NC}"
-    if az pipelines run --id "$PIPELINE_ID" --organization "$ADO_ORG_URL" --project "$ADO_PROJECT" >/dev/null 2>&1; then
-        echo -e "${GREEN}✅ Pipeline run queued.${NC}"
-    else
-        echo -e "${YELLOW}⚠️  Unable to auto-queue run (permissions or agent missing). You can trigger manually in the UI.${NC}"
-    fi
-else
-    echo -e "${YELLOW}Creating pipeline '$PIPELINE_NAME'...${NC}"
-    
-    # First, delete any old pipelines with conflicting names to avoid stale definitions
-    echo "Checking for existing pipelines to clean up..."
-    OLD_PIPELINES=$(az pipelines list --organization "$ADO_ORG_URL" --project "$ADO_PROJECT" --query "[?name=='$PIPELINE_NAME'].id" -o tsv 2>/dev/null || echo "")
-    if [ -n "$OLD_PIPELINES" ]; then
-        while IFS= read -r OLD_ID; do
-            if [ -n "$OLD_ID" ]; then
-                echo "  Removing old pipeline (ID: $OLD_ID)..."
-                az pipelines delete --organization "$ADO_ORG_URL" --project "$ADO_PROJECT" --id "$OLD_ID" --yes 2>/dev/null || true
-            fi
-        done <<< "$OLD_PIPELINES"
-    fi
-    
-    # Create pipeline using Azure CLI
-    # Capture output and error
-    PIPELINE_OUTPUT=$(az pipelines create \
-        --name "$PIPELINE_NAME" \
-        --repository "ADO_DNS_LABS" \
-        --repository-type tfsgit \
-        --branch main \
-        --yml-path "/pipeline.yml" \
-        --organization "$ADO_ORG_URL" \
-        --project "$ADO_PROJECT" \
-        --output json 2>&1)
-    
-    # Extract ID if successful (check if output is valid JSON and has id)
-    PIPELINE_ID=$(echo "$PIPELINE_OUTPUT" | jq -r '.id' 2>/dev/null || echo "")
-    
-    if [ -n "$PIPELINE_ID" ] && [ "$PIPELINE_ID" != "null" ]; then
-        echo -e "${GREEN}✅ Pipeline created (ID: $PIPELINE_ID).${NC}"
-        echo -e "${YELLOW}ℹ️  Pipeline is set to 'trigger: none' - it will not run automatically.${NC}"
-        echo -e "${YELLOW}    Students can manually trigger it when ready for testing.${NC}"
-    else
-        echo -e "${YELLOW}⚠️  Could not create pipeline automatically.${NC}"
-        echo -e "${RED}Error details:${NC}"
-        echo "$PIPELINE_OUTPUT"
-        echo ""
-        echo "Please create it manually:"
-        echo "1. Go to: ${ADO_ORG_URL}/${ADO_PROJECT}/_build"
-        echo "2. Click 'New pipeline'"
-        echo "3. Select 'Azure Repos Git'"
-        echo "4. Select 'ADO_DNS_LABS' repository"
-        echo "5. Select 'Existing Azure Pipelines YAML file'"
-        echo "6. Path: /pipeline.yml"
     fi
 fi
 
