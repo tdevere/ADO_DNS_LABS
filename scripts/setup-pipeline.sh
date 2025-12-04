@@ -417,19 +417,26 @@ fi
 
 # Authorize Service Connection for all pipelines and grant Key Vault access
 if [ -n "$SERVICE_ENDPOINT_ID" ] && [ "$SERVICE_ENDPOINT_ID" != "null" ]; then
+    echo "[DEBUG] SERVICE_ENDPOINT_ID: $SERVICE_ENDPOINT_ID"
     echo "Authorizing service connection for all pipelines..."
-    az devops service-endpoint update \
+    echo "[DEBUG] Running: az devops service-endpoint update with timeout 30s"
+    
+    timeout 30 az devops service-endpoint update \
         --id "$SERVICE_ENDPOINT_ID" \
         --enable-for-all true \
         --organization "$ADO_ORG_URL" \
-        --project "$ADO_PROJECT" >/dev/null 2>&1 || true
+        --project "$ADO_PROJECT" >/dev/null 2>&1 || echo -e "${YELLOW}⚠️ Could not enable for all pipelines (non-critical).${NC}"
 
     # Some connections require manual approval; surface clear guidance
-    APPROVAL_STATE=$(az devops service-endpoint show \
+    echo "[DEBUG] Running: az devops service-endpoint show with timeout 30s"
+    APPROVAL_STATE=$(timeout 30 az devops service-endpoint show \
         --id "$SERVICE_ENDPOINT_ID" \
         --organization "$ADO_ORG_URL" \
         --project "$ADO_PROJECT" \
         --query "isReady" -o tsv 2>/dev/null || echo "")
+    
+    echo "[DEBUG] APPROVAL_STATE: $APPROVAL_STATE"
+    
     if [ "$APPROVAL_STATE" != "True" ] && [ "$APPROVAL_STATE" != "true" ]; then
         echo -e "${YELLOW}⚠️ Service connection pending approval. Please approve it in ADO UI.${NC}"
         echo "Open: ${ADO_ORG_URL}/${ADO_PROJECT}/_settings/adminservices and approve '$SERVICE_CONNECTION_NAME'."
@@ -439,13 +446,16 @@ if [ -n "$SERVICE_ENDPOINT_ID" ] && [ "$SERVICE_ENDPOINT_ID" != "null" ]; then
 
     # Grant Key Vault permissions
     echo "Granting Key Vault access to Service Connection..."
+    echo "[DEBUG] Attempting to get Service Principal ID from connection"
     
     # Get Service Principal ID from the connection (try different query paths)
-    SP_ID=$(az devops service-endpoint show \
+    SP_ID=$(timeout 30 az devops service-endpoint show \
         --id "$SERVICE_ENDPOINT_ID" \
         --organization "$ADO_ORG_URL" \
         --project "$ADO_PROJECT" \
         --query "authorization.parameters.serviceprincipalid" -o tsv 2>/dev/null || echo "")
+    
+    echo "[DEBUG] SP_ID from endpoint show: $SP_ID"
     
     # Fallback: use the APP_ID from creation if SP_ID query failed
     if [ -z "$SP_ID" ] && [ -n "$APP_ID" ]; then
@@ -453,12 +463,17 @@ if [ -n "$SERVICE_ENDPOINT_ID" ] && [ "$SERVICE_ENDPOINT_ID" != "null" ]; then
         SP_ID="$APP_ID"
     fi
     
+    echo "[DEBUG] Final SP_ID: $SP_ID"
+    
     if [ -n "$SP_ID" ]; then
         echo "Service Principal App ID: $SP_ID"
         
         # Get the object ID of the service principal (needed for Terraform KV access policy)
         echo "Resolving Service Principal Object ID for Terraform..."
-        SP_OBJECT_ID=$(az ad sp show --id "$SP_ID" --query id -o tsv 2>/dev/null || echo "")
+        echo "[DEBUG] Running: az ad sp show with timeout 30s"
+        SP_OBJECT_ID=$(timeout 30 az ad sp show --id "$SP_ID" --query id -o tsv 2>/dev/null || echo "")
+        
+        echo "[DEBUG] SP_OBJECT_ID: $SP_OBJECT_ID"
         
         if [ -n "$SP_OBJECT_ID" ]; then
             echo "Service Principal Object ID: $SP_OBJECT_ID"
