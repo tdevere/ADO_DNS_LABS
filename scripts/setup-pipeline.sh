@@ -210,11 +210,12 @@ create_service_connection() {
     SP_NAME="sp-ado-lab-$(date +%s)"
     echo "Creating service principal: $SP_NAME (this may take 30-60 seconds)..."
     
+    # Separate stdout (JSON) from stderr (warnings) - only capture JSON output
     SP_OUTPUT=$(timeout 120 az ad sp create-for-rbac \
         --name "$SP_NAME" \
         --role Contributor \
         --scopes "/subscriptions/$SUBSCRIPTION_ID" \
-        --query "{appId:appId, password:password, tenant:tenant}" -o json 2>&1)
+        --query "{appId:appId, password:password, tenant:tenant}" -o json 2>/dev/null)
     
     SP_EXIT_CODE=$?
     
@@ -227,8 +228,8 @@ create_service_connection() {
         exit 1
     fi
     
-    APP_ID=$(echo "$SP_OUTPUT" | jq -r '.appId' 2>/dev/null || echo "")
-    SP_PASSWORD=$(echo "$SP_OUTPUT" | jq -r '.password' 2>/dev/null || echo "")
+    APP_ID=$(echo "$SP_OUTPUT" | timeout 10 jq -r '.appId' 2>/dev/null || echo "")
+    SP_PASSWORD=$(echo "$SP_OUTPUT" | timeout 10 jq -r '.password' 2>/dev/null || echo "")
     
     if [ -z "$APP_ID" ] || [ "$APP_ID" == "null" ]; then
         echo -e "${RED}❌ Failed to extract App ID from service principal.${NC}"
