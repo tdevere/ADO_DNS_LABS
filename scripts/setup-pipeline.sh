@@ -72,21 +72,21 @@ echo -e "${GREEN}✅ Key Vault: $KV_NAME${NC}"
 
 # 4. Check for existing service connections or generate new name
 echo -e "\n${BLUE}3️⃣  Checking for Existing Service Connection${NC}"
-echo "Looking for service connections matching pattern: SC-${ADO_PROJECT}-*"
-EXISTING_SC_LIST=$(az devops service-endpoint list \
+echo "Looking for service connections matching pattern: SC-DNSLAB-*"
+EXISTING_SC_LIST=$(timeout 15 az devops service-endpoint list \
     --organization "$ADO_ORG_URL" \
     --project "$ADO_PROJECT" \
-    --query "[?starts_with(name, 'SC-${ADO_PROJECT}-')]" -o json 2>/dev/null || echo "[]")
+    -o json 2>/dev/null | timeout 5 jq -c "[.[] | select(.name | startswith(\"SC-DNSLAB-\"))]" 2>/dev/null || echo "[]")
 
 EXISTING_SC_COUNT=$(echo "$EXISTING_SC_LIST" | jq 'length' 2>/dev/null || echo "0")
 
 if [ "$EXISTING_SC_COUNT" -gt 0 ]; then
     # Use the most recent existing service connection
-    SERVICE_CONNECTION_NAME=$(echo "$EXISTING_SC_LIST" | jq -r '[-1].name' 2>/dev/null)
+    SERVICE_CONNECTION_NAME=$(echo "$EXISTING_SC_LIST" | jq -r '.[-1].name' 2>/dev/null)
     echo -e "${GREEN}✅ Found existing service connection: '$SERVICE_CONNECTION_NAME' (will reuse it).${NC}"
 else
     # Generate dynamic service connection name (unique per project to avoid org-wide conflicts)
-    SERVICE_CONNECTION_NAME="SC-${ADO_PROJECT}-$(date +%s)"
+    SERVICE_CONNECTION_NAME="SC-DNSLAB-$(date +%s)"
     echo -e "${YELLOW}No existing service connection found.${NC}"
     echo -e "${BLUE}Will create new service connection: $SERVICE_CONNECTION_NAME${NC}"
 fi
