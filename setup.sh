@@ -160,7 +160,7 @@ echo -e "${GREEN}╚════════════════════
 echo ""
 echo "All infrastructure, agents, and pipelines are ready."
 echo ""
-echo "Next: See ${BLUE}labs/lab1/README.md${NC} to start Lab 1"
-echo "Cleanup: Run ${BLUE}./destroy.sh${NC} when finished"
+echo -e "Next: See ${BLUE}labs/lab1/README.md${NC} to start Lab 1"
+echo -e "Cleanup: Run ${BLUE}./destroy.sh${NC} when finished"
 echo ""
 
