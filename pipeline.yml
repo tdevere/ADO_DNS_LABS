@@ -8,7 +8,7 @@ pool:
 
 variables:
   - name: KeyVaultName
-    value: 'kv-dns-lab-0bcac356'  # Placeholder replaced by setup-pipeline.sh
+    value: 'kv-dns-lab-d2296a55'  # Placeholder replaced by setup-pipeline.sh
   - name: Hint_KeyVaultMismatch
     value: 'If AzureKeyVault@2 times out or shows NXDOMAIN, confirm KeyVaultName matches terraform output: terraform output -raw key_vault_name and re-run ./scripts/setup-pipeline.sh'
 
@@ -56,7 +56,7 @@ stages:
       displayName: 'Fetch Secrets from Key Vault'
       timeoutInMinutes: 2  # Limit secret fetch to fail fast for lab scenario
       inputs:
-        ConnectedServiceName: 'SC-DNSLAB-1764875686'  # Replaced by setup-pipeline.sh
+        ConnectedServiceName: 'SC-DNSLAB-1764880643'  # Replaced by setup-pipeline.sh
         KeyVaultName: '$(KeyVaultName)'
         SecretsFilter: 'TestSecret'
         RunAsPreJob: false
