@@ -87,25 +87,8 @@ Lab 3 deploys a custom DNS server from a pre-configured managed image. The image
 
 ---
 
-## ❓ Common Issues
+## 🎯 About This Lab
 
-**Pipeline fails with "Service connection not found"**
-- Wait 1-2 minutes after setup completes for Azure to propagate permissions
-- The service connection is auto-created with all required Azure permissions
+This hands-on lab teaches Azure Private DNS troubleshooting through realistic DevOps pipeline failures. Each lab introduces different DNS misconfigurations that mirror real-world scenarios. Work through the exercises to build practical skills in diagnosing and resolving DNS issues in Azure.
 
-**Agent not connecting**
-- Check VM is running: `az vm list --resource-group rg-dnslab-* --output table`
-- SSH to VM and check agent status: `sudo systemctl status azure-devops-agent`
-
-**DNS resolution not working**
-- Verify you're testing from the DNS client VM
-- Use `nslookup` or `dig` to test DNS queries
-- Check Private DNS zone VNet links in Azure Portal
-
----
-
-## 🧹 Cleanup
-Destroy lab resources when finished:
-```bash
-terraform destroy -auto-approve
-```
+When finished, run `./destroy.sh` to remove all resources.
