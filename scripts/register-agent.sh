@@ -7,20 +7,25 @@
 
 set -e
 
+# Determine script location and repo root
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
 # Colors
-GREEN=''
-YELLOW=''
-RED=''
-BLUE=''
-NC=''
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+BLUE='\033[0;34m'
+NC='\033[0m'
 
 
 # Load config if exists
-if [ -f ".ado.env" ]; then
-    source .ado.env
+if [ -f "$REPO_ROOT/.ado.env" ]; then
+    source "$REPO_ROOT/.ado.env"
 fi
 
-echo -e "${BLUE}Agent Registration Wizard${NC}\n"
+echo -e "${BLUE}Agent Registration Wizard${NC}
+"
 
 # 1. Gather Information
 if [[ -z "$ADO_ORG_URL" ]]; then
@@ -39,20 +44,21 @@ fi
 
 # Get VM IP from Terraform if possible
 VM_IP=""
-if [ -f "terraform.tfstate" ]; then
+if [ -f "$REPO_ROOT/terraform.tfstate" ]; then
     echo "Attempting to get VM IP from Terraform..."
-    VM_IP=$(terraform output -raw vm_public_ip 2>/dev/null || echo "")
+    VM_IP=$(cd "$REPO_ROOT" && terraform output -raw vm_public_ip 2>/dev/null || echo "")
 fi
 
 if [[ -z "$VM_IP" ]]; then
     read -p "Enter Agent VM Public IP: " VM_IP
 else
     echo -e "Found VM IP: ${YELLOW}$VM_IP${NC}"
-    read -p "Is this correct? (y/n): " -n 1 -r
-    echo ""
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        read -p "Enter Agent VM Public IP: " VM_IP
-    fi
+    # Auto-confirm if running in non-interactive mode or just proceed
+    # read -p "Is this correct? (y/n): " -n 1 -r
+    # echo ""
+    # if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    #     read -p "Enter Agent VM Public IP: " VM_IP
+    # fi
 fi
 
 SSH_KEY_PATH="$HOME/.ssh/terraform_lab_key"
@@ -61,7 +67,7 @@ SSH_PUB_KEY_PATH="${SSH_KEY_PATH}.pub"
 # Ensure we have a key pair; auto-generate if missing
 if [ ! -f "$SSH_KEY_PATH" ] || [ ! -f "$SSH_PUB_KEY_PATH" ]; then
     echo -e "${YELLOW}⚠️  SSH key pair missing. Generating automatically...${NC}"
-    ./scripts/generate-ssh-key.sh --force >/dev/null 2>&1 || { echo -e "${RED}❌ Failed to generate SSH key${NC}"; exit 1; }
+    "$SCRIPT_DIR/generate-ssh-key.sh" --force >/dev/null 2>&1 || { echo -e "${RED}❌ Failed to generate SSH key${NC}"; exit 1; }
 fi
 
 # Extract public key content
@@ -72,31 +78,35 @@ if [ -z "$LOCAL_PUB_KEY" ]; then
 fi
 
 # Read terraform.tfvars public key value
-TFVARS_PUB_KEY="$(grep -E '^admin_ssh_key' terraform.tfvars 2>/dev/null | sed 's/admin_ssh_key\s*=\s*"//; s/"\s*$//')"
+TFVARS_FILE="$REPO_ROOT/terraform.tfvars"
+TFVARS_PUB_KEY="$(grep -E '^admin_ssh_key' "$TFVARS_FILE" 2>/dev/null | sed 's/admin_ssh_key\s*=\s*"//; s/"\s*$//')"
 
 if [ -z "$TFVARS_PUB_KEY" ]; then
     echo -e "${YELLOW}⚠️  admin_ssh_key not found in terraform.tfvars. Inserting current key...${NC}"
-    echo "admin_ssh_key = \"$LOCAL_PUB_KEY\"" >> terraform.tfvars
+    echo "admin_ssh_key = \"$LOCAL_PUB_KEY\"" >> "$TFVARS_FILE"
     TFVARS_PUB_KEY="$LOCAL_PUB_KEY"
 fi
 
 # If mismatch, auto-repair tfvars and re-apply Terraform to push new key
 if [ "$TFVARS_PUB_KEY" != "$LOCAL_PUB_KEY" ]; then
     echo -e "${YELLOW}⚠️  Public key mismatch between local key and terraform.tfvars. Auto-repairing...${NC}"
-    cp terraform.tfvars terraform.tfvars.bak_$(date +%s)
+    cp "$TFVARS_FILE" "${TFVARS_FILE}.bak_$(date +%s)"
     # Replace line
-    sed -i "s|^admin_ssh_key.*|admin_ssh_key = \"$LOCAL_PUB_KEY\"|" terraform.tfvars
+    sed -i "s|^admin_ssh_key.*|admin_ssh_key = \"$LOCAL_PUB_KEY\"|" "$TFVARS_FILE"
     echo -e "${BLUE}Applying Terraform to update VM authorized key...${NC}"
+    cd "$REPO_ROOT"
     terraform apply -auto-approve -lock=false >/dev/null 2>&1 || {
         echo -e "${RED}❌ Terraform apply failed while updating SSH key${NC}"; exit 1; }
+    cd "$SCRIPT_DIR"
     echo -e "${GREEN}✓ VM SSH key updated via Terraform${NC}"
 fi
 
 # Re-fetch VM IP after potential apply
-VM_IP=$(terraform output -raw vm_public_ip 2>/dev/null || echo "$VM_IP")
+VM_IP=$(cd "$REPO_ROOT" && terraform output -raw vm_public_ip 2>/dev/null || echo "$VM_IP")
 
 chmod 600 "$SSH_KEY_PATH" 2>/dev/null || true
 chmod 644 "$SSH_PUB_KEY_PATH" 2>/dev/null || true
+
 
 # Test SSH connectivity before attempting agent registration
 echo -e "${BLUE}Testing SSH connectivity to $VM_IP...${NC}"
@@ -161,7 +171,19 @@ fi
 
 # Check if already configured
 if [ -f ".agent" ]; then
-    echo "Agent already configured. Removing old config..."
+    echo "Agent already configured. Removing old agent from Azure DevOps and VM..."
+    
+    # First, try to deregister from Azure DevOps (graceful removal)
+    if [ -f ".agent" ]; then
+        AGENT_ID=\$(cat .agent | grep -oP '(?<="agentId":)\d+' || echo "")
+        if [ -n "\$AGENT_ID" ]; then
+            echo "Deregistering agent ID \$AGENT_ID from Azure DevOps..."
+            # Attempt graceful removal via config.sh --remove if config exists
+            if [ -f "config.sh" ]; then
+                ./config.sh remove --unattended --auth pat --token "$ADO_PAT" 2>/dev/null || true
+            fi
+        fi
+    fi
     
     # Find and stop all agent services
     for svc in /etc/systemd/system/vsts.agent.*.service; do
@@ -173,12 +195,11 @@ if [ -f ".agent" ]; then
     done
     sudo systemctl daemon-reload || true
     
-    # Force local removal without contacting Azure DevOps
-    # (useful when DNS is broken and we can't reach dev.azure.com)
+    # Remove local agent config and state files
     rm -f .agent .credentials .credentials_rsaparams .runner .path .env .service || true
     rm -rf _diag _work || true
     
-    echo "Old agent removed locally. Proceeding with fresh registration..."
+    echo "Old agent removed. Proceeding with fresh registration..."
 fi
 
 # Configure
