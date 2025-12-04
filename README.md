@@ -12,8 +12,6 @@ Hands-on Azure DNS and private endpoint troubleshooting. After this single READM
 
 **Estimated Time:** 3–4 hours for full series (current enabled: Lab 1; others optional / commented).
 
-👉 AI helper prompts: `docs/AI_PROMPTS.md`
-
 ---
 
 ## 📋 Prerequisites
@@ -104,9 +102,24 @@ ssh -i ~/.ssh/terraform_lab_key azureuser@"$VM_IP" "curl -sv https://${KV_NAME}.
 3. **Lab 3** - Advanced scenario with custom DNS server (uses pre-built image)
 
 **Lab 3 Note:**
-Lab 3 deploys a custom DNS server from a pre-configured managed image. The image ID is already set in `terraform.tfvars`. If you need to rebuild the image, see [Lab 3 Image Build Guide](docs/LAB3_IMAGE_BUILD.md).
+Lab 3 deploys a custom DNS server from a pre-configured managed image. The image ID is already set in `terraform.tfvars`. See `labs/lab3/README.md` for details on the custom DNS setup.
 
-If students are working from their own subscriptions, instructors can publish the image to an Azure Compute Gallery and share access. See "Publish to Azure Compute Gallery" in [Lab 3 Image Build Guide](docs/LAB3_IMAGE_BUILD.md).
+---
+
+## ❓ Common Issues
+
+**Pipeline fails with "Service connection not found"**
+- Wait 1-2 minutes after setup completes for Azure to propagate permissions
+- The service connection is auto-created with all required Azure permissions
+
+**Agent not connecting**
+- Check VM is running: `az vm list --resource-group rg-dnslab-* --output table`
+- SSH to VM and check agent status: `sudo systemctl status azure-devops-agent`
+
+**DNS resolution not working**
+- Verify you're testing from the DNS client VM
+- Use `nslookup` or `dig` to test DNS queries
+- Check Private DNS zone VNet links in Azure Portal
 
 ---
 

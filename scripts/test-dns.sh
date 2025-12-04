@@ -110,4 +110,4 @@ rm -f /tmp/dns_test.txt /tmp/dns_test_azure.txt /tmp/curl_test.txt
 
 echo -e "${GREEN}Testing complete!${NC}"
 echo ""
-echo "For troubleshooting help, see: docs/TROUBLESHOOTING.md"
+echo "For troubleshooting help, see the main README.md"
