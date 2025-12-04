@@ -109,10 +109,8 @@ if [ -f "$PIPELINE_FILE" ]; then
     fi
 
     # Update Service Connection Name - direct replacement in ConnectedServiceName
-    if grep -q 'SC-DNSLAB-REPLACE_ME' "$PIPELINE_FILE"; then
-        sed -i "s/SC-DNSLAB-REPLACE_ME/$SERVICE_CONNECTION_NAME/g" "$PIPELINE_FILE"
-        UPDATED=true
-    fi
+    sed -i "s/ConnectedServiceName: 'SC-DNSLAB-[0-9]*'/ConnectedServiceName: '$SERVICE_CONNECTION_NAME'/g" "$PIPELINE_FILE"
+    UPDATED=true
 
     if [ "$UPDATED" = true ]; then
         echo -e "${GREEN}✅ Updated pipeline.yml with Key Vault and Service Connection names.${NC}"
@@ -124,8 +122,20 @@ else
     exit 1
 fi
 
-# 6. Create or verify Azure Repos repository
-echo -e "\n${BLUE}5️⃣  Setting up Azure Repos Repository${NC}"
+# 6. Commit pipeline.yml changes BEFORE pushing to trigger pipeline with correct config
+echo -e "\n${BLUE}5️⃣  Committing Updated Pipeline Configuration${NC}"
+cd "$REPO_ROOT"
+if git diff --quiet pipeline.yml; then
+    echo -e "${GREEN}✅ pipeline.yml already committed.${NC}"
+else
+    echo "Committing updated pipeline.yml..."
+    git add pipeline.yml
+    git commit -m "Update pipeline.yml with service connection and Key Vault names" || true
+    echo -e "${GREEN}✅ pipeline.yml committed.${NC}"
+fi
+
+# 7. Create or verify Azure Repos repository
+echo -e "\n${BLUE}6️⃣  Setting up Azure Repos Repository${NC}"
 REPO_NAME="ADO_DNS_LABS"
 
 # Check if repo exists
@@ -146,7 +156,7 @@ else
 fi
 
 # 7. Initialize and push to Azure Repos
-echo -e "\n${BLUE}6️⃣  Pushing Code to Azure Repos${NC}"
+echo -e "\n${BLUE}7️⃣  Pushing Code to Azure Repos${NC}"
 
 # Move to repo root for git operations
 cd "$REPO_ROOT"
@@ -189,7 +199,7 @@ fi
 git config --unset core.hookspath || true
 
 # 8. Create Service Connection
-echo -e "\n${BLUE}7️⃣  Creating Service Connection${NC}"
+echo -e "\n${BLUE}8️⃣  Creating Service Connection${NC}"
 # SERVICE_CONNECTION_NAME already set dynamically above
 
 create_service_connection() {
@@ -468,7 +478,7 @@ if [ -n "$SERVICE_ENDPOINT_ID" ] && [ "$SERVICE_ENDPOINT_ID" != "null" ]; then
 fi
 
 # 9. Create Pipeline
-echo -e "\n${BLUE}8️⃣  Creating Pipeline${NC}"
+echo -e "\n${BLUE}9️⃣  Creating Pipeline${NC}"
 PIPELINE_NAME="DNS-Lab-Pipeline"
 
 # Check if pipeline already exists
