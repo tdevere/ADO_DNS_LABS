@@ -56,7 +56,7 @@ stages:
       displayName: 'Fetch Secrets from Key Vault'
       timeoutInMinutes: 2  # Limit secret fetch to fail fast for lab scenario
       inputs:
-        ConnectedServiceName: 'SC-DNSLAB-REPLACE_ME'  # Replaced by setup-pipeline.sh
+        ConnectedServiceName: 'SC-DNSLAB-1764873186'  # Replaced by setup-pipeline.sh
         KeyVaultName: '$(KeyVaultName)'
         SecretsFilter: 'TestSecret'
         RunAsPreJob: false
