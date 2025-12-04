@@ -208,21 +208,36 @@ create_service_connection() {
     
     # Create service principal for the service connection
     SP_NAME="sp-ado-lab-$(date +%s)"
+    echo "[DEBUG] SP_NAME: $SP_NAME"
+    echo "[DEBUG] SUBSCRIPTION_ID: $SUBSCRIPTION_ID"
     echo "Creating service principal: $SP_NAME (this may take 30-60 seconds)..."
+    
+    echo "[DEBUG] Running: az ad sp create-for-rbac with timeout 120s"
     SP_OUTPUT=$(timeout 120 az ad sp create-for-rbac \
         --name "$SP_NAME" \
         --role Contributor \
         --scopes "/subscriptions/$SUBSCRIPTION_ID" \
         --query "{appId:appId, password:password, tenant:tenant}" -o json 2>&1)
     
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}❌ Service principal creation timed out or failed.${NC}"
+    SP_EXIT_CODE=$?
+    echo "[DEBUG] az ad sp create-for-rbac exit code: $SP_EXIT_CODE"
+    
+    if [ $SP_EXIT_CODE -eq 124 ]; then
+        echo -e "${RED}❌ Service principal creation TIMED OUT (120 seconds).${NC}"
+        exit 1
+    elif [ $SP_EXIT_CODE -ne 0 ]; then
+        echo -e "${RED}❌ Service principal creation FAILED with exit code $SP_EXIT_CODE.${NC}"
         echo "Response: $SP_OUTPUT"
         exit 1
     fi
     
+    echo "[DEBUG] SP_OUTPUT (first 300 chars): ${SP_OUTPUT:0:300}"
+    
     APP_ID=$(echo "$SP_OUTPUT" | jq -r '.appId' 2>/dev/null || echo "")
     SP_PASSWORD=$(echo "$SP_OUTPUT" | jq -r '.password' 2>/dev/null || echo "")
+    
+    echo "[DEBUG] Extracted APP_ID: $APP_ID"
+    echo "[DEBUG] SP_PASSWORD length: ${#SP_PASSWORD}"
     
     if [ -z "$APP_ID" ] || [ "$APP_ID" == "null" ]; then
         echo -e "${RED}❌ Failed to extract App ID from service principal.${NC}"
@@ -230,14 +245,17 @@ create_service_connection() {
         exit 1
     fi
     
-    echo "Service Principal App ID: $APP_ID"
+    echo "✓ Service Principal created with App ID: $APP_ID"
     
     # Wait for service principal propagation
     echo "Waiting 15 seconds for service principal to propagate..."
     sleep 15
     
     # Get Project ID for robust reference
+    echo "[DEBUG] Running: az devops project show"
     PROJECT_ID=$(az devops project show --project "$ADO_PROJECT" --organization "$ADO_ORG_URL" --query id -o tsv 2>/dev/null || echo "")
+    
+    echo "[DEBUG] PROJECT_ID: $PROJECT_ID"
     
     if [ -z "$PROJECT_ID" ]; then
         echo -e "${RED}❌ Could not retrieve project ID.${NC}"
@@ -246,6 +264,7 @@ create_service_connection() {
     
     # Create service connection configuration file
     SC_CONFIG_FILE="sc_config_$(date +%s).json"
+    echo "[DEBUG] Creating config file: $SC_CONFIG_FILE"
     cat <<EOF > "$SC_CONFIG_FILE"
 {
   "name": "$name",
@@ -281,7 +300,10 @@ create_service_connection() {
 }
 EOF
 
+    echo "[DEBUG] Config file created, size: $(wc -c < "$SC_CONFIG_FILE") bytes"
     echo "Creating service endpoint (this may take 20-30 seconds)..."
+    echo "[DEBUG] Running: az devops service-endpoint create with timeout 60s"
+    
     # Use the generic create command which takes the JSON config (including the key)
     # This avoids interactive prompts while using the robust CLI client
     SC_RESPONSE=$(timeout 60 az devops service-endpoint create \
@@ -290,8 +312,22 @@ EOF
         --project "$ADO_PROJECT" \
         --output json 2>&1)
     
+    SC_EXIT_CODE=$?
+    echo "[DEBUG] az devops service-endpoint create exit code: $SC_EXIT_CODE"
+    
     # Clean up config file immediately to protect secrets
     rm -f "$SC_CONFIG_FILE"
+    echo "[DEBUG] Config file deleted"
+    
+    if [ $SC_EXIT_CODE -eq 124 ]; then
+        echo -e "${RED}❌ Service endpoint creation TIMED OUT (60 seconds).${NC}"
+        echo "[DEBUG] This usually means the Azure DevOps CLI is hanging."
+        exit 1
+    elif [ $SC_EXIT_CODE -ne 0 ]; then
+        echo "[DEBUG] Exit code was non-zero but not timeout"
+    fi
+    
+    echo "[DEBUG] SC_RESPONSE (first 500 chars): ${SC_RESPONSE:0:500}"
     
     SERVICE_ENDPOINT_ID=$(echo "$SC_RESPONSE" | jq -r '.id' 2>/dev/null || echo "")
     
