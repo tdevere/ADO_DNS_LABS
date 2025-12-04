@@ -27,36 +27,57 @@ Hands-on Azure DNS and private endpoint troubleshooting. After this single READM
 
 ---
 
-## 🚀 Setup (Single Pass)
+## 🚀 Setup
 
-1. Azure login:
-```bash
-az login --use-device-code
-```
-2. Select subscription:
-```bash
-az account set --subscription "<SUBSCRIPTION_ID>"
-```
-3. Deploy infrastructure & prepare ADO (prompts for Org URL + PAT):
-```bash
-./setup.sh
-```
-4. Register self-hosted agent in pool `DNS-Lab-Pool`:
-```bash
-./scripts/register-agent.sh
-```
-5. Create / update pipeline & service connection (injects Key Vault name):
-```bash
-./scripts/setup-pipeline.sh
-```
-	Expected results:
-	- `pipeline.yml` KeyVaultName replaced with dynamic value
-	- Service connection `LabConnection` authorized for all pipelines
-	- Key Vault access policy (or RBAC role) granted for secrets get/list
+1. **Configure Environment Variables**
+   Create a file named `.ado.env` in the root of the repository and add your Azure DevOps details.
+   
+   ```bash
+   cp .ado.env.example .ado.env
+   code .ado.env
+   ```
+   
+   **Required Variables:**
+   ```bash
+   export ADO_ORG_URL="https://dev.azure.com/your-org"
+   export ADO_PAT="your-personal-access-token"
+   export ADO_PROJECT="NetworkingLab"
+   export ADO_POOL="DNS-Lab-Pool"
+   ```
+   > **PAT Requirements:** Scopes must include **Agent Pools (Read & Manage)** and **Service Connections (Read, Query & Manage)**.
+
+2. **Run the Setup Wizard**
+   This script orchestrates the entire setup process (Azure Login, Terraform, Agent Registration, Pipeline Setup).
+
+   ```bash
+   ./setup.sh
+   ```
 
 ---
 
-## ✅ Optional Base Validation
+## 🧹 Cleanup (Destroy)
+
+To remove all lab resources and start fresh:
+
+```bash
+./destroy.sh
+```
+
+This script:
+- Removes ADO resources (Project, Pipeline, Service Connections, Agent Pool)
+- Destroys Azure infrastructure (VMs, Networks, Key Vaults, etc.)
+- Optionally cleans up local Terraform files
+- **Requires confirmation** - you must type `destroy` to proceed
+
+**Use cases:**
+- End of training session to avoid ongoing costs
+- Reset lab to clean state for new student
+- Remove resources from shared subscription
+
+---
+
+## ✅ Validation (Automated)
+The setup script runs validation automatically. To re-run validation at any time:
 ```bash
 ./scripts/validate-base.sh
 ```
