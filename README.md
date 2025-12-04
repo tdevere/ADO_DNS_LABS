@@ -10,7 +10,7 @@ Hands-on Azure DNS and private endpoint troubleshooting. After this single READM
 - Configure and run a pipeline that validates DNS + secret access
 - Introduce and diagnose DNS failures (A record drift, missing VNet link, custom DNS forwarding)
 
-**Estimated Time:** 3–4 hours for full series (current enabled: Lab 1; others optional / commented).
+**Estimated Time:** 3–4 hours for all three labs.
 
 ---
 

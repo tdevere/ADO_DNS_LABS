@@ -50,7 +50,3 @@ dns_image_builder_key.pub
 
 # Terraform plan files
 plan-*
-
-# Temporary notes
-deleteme.md
-vending-machine-repo/
