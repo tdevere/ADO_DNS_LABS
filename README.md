@@ -27,52 +27,43 @@ Hands-on Azure DNS and private endpoint troubleshooting. After this single READM
 
 ---
 
-## 🚀 Setup
+## 🚀 Quick Start
 
-1. **Configure Environment Variables**
-   Create a file named `.ado.env` in the root of the repository and add your Azure DevOps details.
-   
+1. **Configure `.ado.env`**
    ```bash
    cp .ado.env.example .ado.env
-   code .ado.env
+   code .ado.env  # Add your ADO org URL and PAT
    ```
    
-   **Required Variables:**
-   ```bash
-   export ADO_ORG_URL="https://dev.azure.com/your-org"
-   export ADO_PAT="your-personal-access-token"
-   export ADO_PROJECT="NetworkingLab"
-   export ADO_POOL="DNS-Lab-Pool"
-   ```
-   > **PAT Requirements:** Scopes must include **Agent Pools (Read & Manage)** and **Service Connections (Read, Query & Manage)**.
+   Required variables:
+   - `ADO_ORG_URL` - Your Azure DevOps organization URL
+   - `ADO_PAT` - Personal Access Token (Agent Pools + Service Connections permissions)
+   - `ADO_PROJECT` - Project name (default: DNSLAB)
+   - `ADO_POOL` - Agent pool name (default: DNS-Lab-Pool)
 
-2. **Run the Setup Wizard**
-   This script orchestrates the entire setup process (Azure Login, Terraform, Agent Registration, Pipeline Setup).
-
+2. **Run Setup (One Command)**
    ```bash
    ./setup.sh
    ```
+   
+   This creates:
+   - Azure DevOps project, agent pool, service connection, and pipeline
+   - Azure infrastructure (VNet, VM, Key Vault, DNS zones)
+   - Self-hosted agent registered and running
+   
+   **Takes ~5-10 minutes**. When complete, proceed to `docs/LAB_GUIDE.md`
 
 ---
 
-## 🧹 Cleanup (Destroy)
+## 🧹 Cleanup
 
-To remove all lab resources and start fresh:
+Remove all resources when finished:
 
 ```bash
 ./destroy.sh
 ```
 
-This script:
-- Removes ADO resources (Project, Pipeline, Service Connections, Agent Pool)
-- Destroys Azure infrastructure (VMs, Networks, Key Vaults, etc.)
-- Optionally cleans up local Terraform files
-- **Requires confirmation** - you must type `destroy` to proceed
-
-**Use cases:**
-- End of training session to avoid ongoing costs
-- Reset lab to clean state for new student
-- Remove resources from shared subscription
+Removes Azure DevOps project, pipelines, service connections, agent pool, and all Azure infrastructure. Requires typing `destroy` to confirm
 
 ---
 
