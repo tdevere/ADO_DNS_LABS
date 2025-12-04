@@ -200,8 +200,10 @@ git config --unset core.hookspath || true
 
 # 8. Create Service Connection
 echo -e "\n${BLUE}8️⃣  Creating Service Connection${NC}"
+echo "[DEBUG] Script still running after step 8 header"
 # SERVICE_CONNECTION_NAME already set dynamically above
 
+echo "[DEBUG] About to define create_service_connection function"
 create_service_connection() {
     local name="$1"
     echo -e "${YELLOW}Creating Service Connection '$name'...${NC}"
@@ -401,6 +403,9 @@ EOF
         fi
     fi
 }
+
+echo "[DEBUG] Function definition complete, now checking EXISTING_SC_COUNT"
+echo "[DEBUG] EXISTING_SC_COUNT=$EXISTING_SC_COUNT"
 
 # Create or retrieve service connection
 if [ "$EXISTING_SC_COUNT" -gt 0 ]; then
