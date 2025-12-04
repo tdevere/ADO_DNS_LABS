@@ -200,21 +200,16 @@ git config --unset core.hookspath || true
 
 # 8. Create Service Connection
 echo -e "\n${BLUE}8️⃣  Creating Service Connection${NC}"
-echo "[DEBUG] Script still running after step 8 header"
 # SERVICE_CONNECTION_NAME already set dynamically above
 
-echo "[DEBUG] About to define create_service_connection function"
 create_service_connection() {
     local name="$1"
     echo -e "${YELLOW}Creating Service Connection '$name'...${NC}"
     
     # Create service principal for the service connection
     SP_NAME="sp-ado-lab-$(date +%s)"
-    echo "[DEBUG] SP_NAME: $SP_NAME"
-    echo "[DEBUG] SUBSCRIPTION_ID: $SUBSCRIPTION_ID"
     echo "Creating service principal: $SP_NAME (this may take 30-60 seconds)..."
     
-    echo "[DEBUG] Running: az ad sp create-for-rbac with timeout 120s"
     SP_OUTPUT=$(timeout 120 az ad sp create-for-rbac \
         --name "$SP_NAME" \
         --role Contributor \
@@ -222,24 +217,18 @@ create_service_connection() {
         --query "{appId:appId, password:password, tenant:tenant}" -o json 2>&1)
     
     SP_EXIT_CODE=$?
-    echo "[DEBUG] az ad sp create-for-rbac exit code: $SP_EXIT_CODE"
     
     if [ $SP_EXIT_CODE -eq 124 ]; then
         echo -e "${RED}❌ Service principal creation TIMED OUT (120 seconds).${NC}"
         exit 1
     elif [ $SP_EXIT_CODE -ne 0 ]; then
-        echo -e "${RED}❌ Service principal creation FAILED with exit code $SP_EXIT_CODE.${NC}"
+        echo -e "${RED}❌ Service principal creation FAILED.${NC}"
         echo "Response: $SP_OUTPUT"
         exit 1
     fi
     
-    echo "[DEBUG] SP_OUTPUT (first 300 chars): ${SP_OUTPUT:0:300}"
-    
     APP_ID=$(echo "$SP_OUTPUT" | jq -r '.appId' 2>/dev/null || echo "")
     SP_PASSWORD=$(echo "$SP_OUTPUT" | jq -r '.password' 2>/dev/null || echo "")
-    
-    echo "[DEBUG] Extracted APP_ID: $APP_ID"
-    echo "[DEBUG] SP_PASSWORD length: ${#SP_PASSWORD}"
     
     if [ -z "$APP_ID" ] || [ "$APP_ID" == "null" ]; then
         echo -e "${RED}❌ Failed to extract App ID from service principal.${NC}"
@@ -254,10 +243,7 @@ create_service_connection() {
     sleep 15
     
     # Get Project ID for robust reference
-    echo "[DEBUG] Running: az devops project show"
     PROJECT_ID=$(az devops project show --project "$ADO_PROJECT" --organization "$ADO_ORG_URL" --query id -o tsv 2>/dev/null || echo "")
-    
-    echo "[DEBUG] PROJECT_ID: $PROJECT_ID"
     
     if [ -z "$PROJECT_ID" ]; then
         echo -e "${RED}❌ Could not retrieve project ID.${NC}"
@@ -266,7 +252,6 @@ create_service_connection() {
     
     # Create service connection configuration file
     SC_CONFIG_FILE="sc_config_$(date +%s).json"
-    echo "[DEBUG] Creating config file: $SC_CONFIG_FILE"
     cat <<EOF > "$SC_CONFIG_FILE"
 {
   "name": "$name",
@@ -302,9 +287,7 @@ create_service_connection() {
 }
 EOF
 
-    echo "[DEBUG] Config file created, size: $(wc -c < "$SC_CONFIG_FILE") bytes"
     echo "Creating service endpoint (this may take 20-30 seconds)..."
-    echo "[DEBUG] Running: az devops service-endpoint create with timeout 60s"
     
     # Use the generic create command which takes the JSON config (including the key)
     # This avoids interactive prompts while using the robust CLI client
@@ -315,21 +298,14 @@ EOF
         --output json 2>&1)
     
     SC_EXIT_CODE=$?
-    echo "[DEBUG] az devops service-endpoint create exit code: $SC_EXIT_CODE"
     
     # Clean up config file immediately to protect secrets
     rm -f "$SC_CONFIG_FILE"
-    echo "[DEBUG] Config file deleted"
     
     if [ $SC_EXIT_CODE -eq 124 ]; then
         echo -e "${RED}❌ Service endpoint creation TIMED OUT (60 seconds).${NC}"
-        echo "[DEBUG] This usually means the Azure DevOps CLI is hanging."
         exit 1
-    elif [ $SC_EXIT_CODE -ne 0 ]; then
-        echo "[DEBUG] Exit code was non-zero but not timeout"
     fi
-    
-    echo "[DEBUG] SC_RESPONSE (first 500 chars): ${SC_RESPONSE:0:500}"
     
     SERVICE_ENDPOINT_ID=$(echo "$SC_RESPONSE" | jq -r '.id' 2>/dev/null || echo "")
     
@@ -404,39 +380,22 @@ EOF
     fi
 }
 
-echo "[DEBUG] Function definition complete, now checking EXISTING_SC_COUNT"
-echo "[DEBUG] EXISTING_SC_COUNT=$EXISTING_SC_COUNT"
-
 # Create or retrieve service connection
 if [ "$EXISTING_SC_COUNT" -gt 0 ]; then
-    echo "[DEBUG] Entering existing SC branch"
-    echo "[DEBUG] EXISTING_SC_LIST (first 200 chars): ${EXISTING_SC_LIST:0:200}"
-    echo "[DEBUG] About to extract SERVICE_ENDPOINT_ID with jq"
-    
-    # Retrieve existing service connection details
+    # Retrieve existing service connection details (with timeout to prevent hang)
     SERVICE_ENDPOINT_ID=$(timeout 10 bash -c "echo '$EXISTING_SC_LIST' | jq -r '.[-1].id'" 2>/dev/null || echo "")
-    
-    echo "[DEBUG] SERVICE_ENDPOINT_ID extracted: $SERVICE_ENDPOINT_ID"
     echo -e "${GREEN}✅ Using existing service connection (ID: $SERVICE_ENDPOINT_ID).${NC}"
     
-    echo "[DEBUG] About to extract APP_ID with jq"
-    # Get APP_ID for later use in Key Vault access grant
+    # Get APP_ID for later use in Key Vault access grant (with timeout)
     APP_ID=$(timeout 10 bash -c "echo '$EXISTING_SC_LIST' | jq -r '.[-1].authorization.parameters.serviceprincipalid'" 2>/dev/null || echo "")
-    echo "[DEBUG] APP_ID extracted: $APP_ID"
 else
     # Create new service connection
     create_service_connection "$SERVICE_CONNECTION_NAME"
 fi
 
-echo "[DEBUG] After SC selection: SERVICE_ENDPOINT_ID='$SERVICE_ENDPOINT_ID' (length: ${#SERVICE_ENDPOINT_ID})"
-echo "[DEBUG] Condition check: [ -n '$SERVICE_ENDPOINT_ID' ] && [ '$SERVICE_ENDPOINT_ID' != 'null' ]"
-
 # Authorize Service Connection for all pipelines and grant Key Vault access
 if [ -n "$SERVICE_ENDPOINT_ID" ] && [ "$SERVICE_ENDPOINT_ID" != "null" ]; then
-    echo "[DEBUG] Entering authorization section"
-    echo "[DEBUG] SERVICE_ENDPOINT_ID: $SERVICE_ENDPOINT_ID"
     echo "Authorizing service connection for all pipelines..."
-    echo "[DEBUG] Running: az devops service-endpoint update with timeout 30s"
     
     timeout 30 az devops service-endpoint update \
         --id "$SERVICE_ENDPOINT_ID" \
@@ -445,14 +404,11 @@ if [ -n "$SERVICE_ENDPOINT_ID" ] && [ "$SERVICE_ENDPOINT_ID" != "null" ]; then
         --project "$ADO_PROJECT" >/dev/null 2>&1 || echo -e "${YELLOW}⚠️ Could not enable for all pipelines (non-critical).${NC}"
 
     # Some connections require manual approval; surface clear guidance
-    echo "[DEBUG] Running: az devops service-endpoint show with timeout 30s"
     APPROVAL_STATE=$(timeout 30 az devops service-endpoint show \
         --id "$SERVICE_ENDPOINT_ID" \
         --organization "$ADO_ORG_URL" \
         --project "$ADO_PROJECT" \
         --query "isReady" -o tsv 2>/dev/null || echo "")
-    
-    echo "[DEBUG] APPROVAL_STATE: $APPROVAL_STATE"
     
     if [ "$APPROVAL_STATE" != "True" ] && [ "$APPROVAL_STATE" != "true" ]; then
         echo -e "${YELLOW}⚠️ Service connection pending approval. Please approve it in ADO UI.${NC}"
@@ -463,16 +419,13 @@ if [ -n "$SERVICE_ENDPOINT_ID" ] && [ "$SERVICE_ENDPOINT_ID" != "null" ]; then
 
     # Grant Key Vault permissions
     echo "Granting Key Vault access to Service Connection..."
-    echo "[DEBUG] Attempting to get Service Principal ID from connection"
     
-    # Get Service Principal ID from the connection (try different query paths)
+    # Get Service Principal ID from the connection (with timeout to prevent hang)
     SP_ID=$(timeout 30 az devops service-endpoint show \
         --id "$SERVICE_ENDPOINT_ID" \
         --organization "$ADO_ORG_URL" \
         --project "$ADO_PROJECT" \
         --query "authorization.parameters.serviceprincipalid" -o tsv 2>/dev/null || echo "")
-    
-    echo "[DEBUG] SP_ID from endpoint show: $SP_ID"
     
     # Fallback: use the APP_ID from creation if SP_ID query failed
     if [ -z "$SP_ID" ] && [ -n "$APP_ID" ]; then
@@ -480,17 +433,12 @@ if [ -n "$SERVICE_ENDPOINT_ID" ] && [ "$SERVICE_ENDPOINT_ID" != "null" ]; then
         SP_ID="$APP_ID"
     fi
     
-    echo "[DEBUG] Final SP_ID: $SP_ID"
-    
     if [ -n "$SP_ID" ]; then
         echo "Service Principal App ID: $SP_ID"
         
         # Get the object ID of the service principal (needed for Terraform KV access policy)
         echo "Resolving Service Principal Object ID for Terraform..."
-        echo "[DEBUG] Running: az ad sp show with timeout 30s"
         SP_OBJECT_ID=$(timeout 30 az ad sp show --id "$SP_ID" --query id -o tsv 2>/dev/null || echo "")
-        
-        echo "[DEBUG] SP_OBJECT_ID: $SP_OBJECT_ID"
         
         if [ -n "$SP_OBJECT_ID" ]; then
             echo "Service Principal Object ID: $SP_OBJECT_ID"
