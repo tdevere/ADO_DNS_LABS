@@ -409,12 +409,20 @@ echo "[DEBUG] EXISTING_SC_COUNT=$EXISTING_SC_COUNT"
 
 # Create or retrieve service connection
 if [ "$EXISTING_SC_COUNT" -gt 0 ]; then
+    echo "[DEBUG] Entering existing SC branch"
+    echo "[DEBUG] EXISTING_SC_LIST (first 200 chars): ${EXISTING_SC_LIST:0:200}"
+    echo "[DEBUG] About to extract SERVICE_ENDPOINT_ID with jq"
+    
     # Retrieve existing service connection details
-    SERVICE_ENDPOINT_ID=$(echo "$EXISTING_SC_LIST" | jq -r '[-1].id' 2>/dev/null)
+    SERVICE_ENDPOINT_ID=$(timeout 10 bash -c "echo '$EXISTING_SC_LIST' | jq -r '.[-1].id'" 2>/dev/null || echo "")
+    
+    echo "[DEBUG] SERVICE_ENDPOINT_ID extracted: $SERVICE_ENDPOINT_ID"
     echo -e "${GREEN}✅ Using existing service connection (ID: $SERVICE_ENDPOINT_ID).${NC}"
     
+    echo "[DEBUG] About to extract APP_ID with jq"
     # Get APP_ID for later use in Key Vault access grant
-    APP_ID=$(echo "$EXISTING_SC_LIST" | jq -r '[-1].authorization.parameters.serviceprincipalid' 2>/dev/null)
+    APP_ID=$(timeout 10 bash -c "echo '$EXISTING_SC_LIST' | jq -r '.[-1].authorization.parameters.serviceprincipalid'" 2>/dev/null || echo "")
+    echo "[DEBUG] APP_ID extracted: $APP_ID"
 else
     # Create new service connection
     create_service_connection "$SERVICE_CONNECTION_NAME"
