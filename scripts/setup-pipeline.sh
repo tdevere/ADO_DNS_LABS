@@ -213,10 +213,23 @@ if [ -n "$EXISTING_PIPELINE" ]; then
     PIPELINE_ID="$EXISTING_PIPELINE"
     # Optional: queue a run to surface agent availability issues early
     echo -e "${BLUE}🔄 Queuing a pipeline run to verify agent availability...${NC}"
-    if az pipelines run --id "$PIPELINE_ID" --organization "$ADO_ORG_URL" --project "$ADO_PROJECT" >/dev/null 2>&1; then
-        echo -e "${GREEN}✅ Pipeline run queued.${NC}"
+    
+    RUN_OUTPUT=$(az pipelines run --id "$PIPELINE_ID" --organization "$ADO_ORG_URL" --project "$ADO_PROJECT" --output json 2>&1)
+    RUN_EXIT_CODE=$?
+    
+    if [ $RUN_EXIT_CODE -eq 0 ]; then
+        RUN_ID=$(echo "$RUN_OUTPUT" | jq -r '.id' 2>/dev/null || echo "")
+        if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
+            BUILD_URL="${ADO_ORG_URL}/${ADO_PROJECT}/_build/results?buildId=${RUN_ID}"
+            echo -e "${GREEN}✅ Pipeline run queued (Build ID: $RUN_ID).${NC}"
+            echo -e "${BLUE}   View build: ${BUILD_URL}${NC}"
+        else
+            echo -e "${GREEN}✅ Pipeline run queued.${NC}"
+        fi
     else
-        echo -e "${YELLOW}⚠️  Unable to auto-queue run (permissions or agent missing). You can trigger manually in the UI.${NC}"
+        echo -e "${YELLOW}⚠️  Unable to auto-queue run.${NC}"
+        echo -e "${YELLOW}   Error: $RUN_OUTPUT${NC}"
+        echo -e "${YELLOW}   Trigger manually: ${ADO_ORG_URL}/${ADO_PROJECT}/_build?definitionId=${PIPELINE_ID}${NC}"
     fi
 else
     echo -e "${YELLOW}Creating pipeline '$PIPELINE_NAME'...${NC}"
@@ -250,6 +263,7 @@ else
     
     if [ -n "$PIPELINE_ID" ] && [ "$PIPELINE_ID" != "null" ]; then
         echo -e "${GREEN}✅ Pipeline created (ID: $PIPELINE_ID).${NC}"
+        echo -e "${BLUE}   Pipeline URL: ${ADO_ORG_URL}/${ADO_PROJECT}/_build?definitionId=${PIPELINE_ID}${NC}"
         echo -e "${YELLOW}ℹ️  Pipeline is set to 'trigger: none' - it will not run automatically.${NC}"
         echo -e "${YELLOW}    Students can manually trigger it when ready for testing.${NC}"
     else
