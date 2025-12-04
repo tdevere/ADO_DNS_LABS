@@ -208,24 +208,41 @@ create_service_connection() {
     
     # Create service principal for the service connection
     SP_NAME="sp-ado-lab-$(date +%s)"
-    echo "Creating service principal: $SP_NAME"
-    SP_OUTPUT=$(az ad sp create-for-rbac \
+    echo "Creating service principal: $SP_NAME (this may take 30-60 seconds)..."
+    SP_OUTPUT=$(timeout 120 az ad sp create-for-rbac \
         --name "$SP_NAME" \
         --role Contributor \
         --scopes "/subscriptions/$SUBSCRIPTION_ID" \
-        --query "{appId:appId, password:password, tenant:tenant}" -o json)
+        --query "{appId:appId, password:password, tenant:tenant}" -o json 2>&1)
     
-    APP_ID=$(echo "$SP_OUTPUT" | jq -r '.appId')
-    SP_PASSWORD=$(echo "$SP_OUTPUT" | jq -r '.password')
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ Service principal creation timed out or failed.${NC}"
+        echo "Response: $SP_OUTPUT"
+        exit 1
+    fi
+    
+    APP_ID=$(echo "$SP_OUTPUT" | jq -r '.appId' 2>/dev/null || echo "")
+    SP_PASSWORD=$(echo "$SP_OUTPUT" | jq -r '.password' 2>/dev/null || echo "")
+    
+    if [ -z "$APP_ID" ] || [ "$APP_ID" == "null" ]; then
+        echo -e "${RED}❌ Failed to extract App ID from service principal.${NC}"
+        echo "Response: $SP_OUTPUT"
+        exit 1
+    fi
     
     echo "Service Principal App ID: $APP_ID"
     
     # Wait for service principal propagation
-    echo "Waiting for service principal to propagate..."
+    echo "Waiting 15 seconds for service principal to propagate..."
     sleep 15
     
     # Get Project ID for robust reference
-    PROJECT_ID=$(az devops project show --project "$ADO_PROJECT" --organization "$ADO_ORG_URL" --query id -o tsv)
+    PROJECT_ID=$(az devops project show --project "$ADO_PROJECT" --organization "$ADO_ORG_URL" --query id -o tsv 2>/dev/null || echo "")
+    
+    if [ -z "$PROJECT_ID" ]; then
+        echo -e "${RED}❌ Could not retrieve project ID.${NC}"
+        exit 1
+    fi
     
     # Create service connection configuration file
     SC_CONFIG_FILE="sc_config_$(date +%s).json"
@@ -264,10 +281,10 @@ create_service_connection() {
 }
 EOF
 
-    echo "Creating service endpoint via Azure DevOps CLI..."
+    echo "Creating service endpoint (this may take 20-30 seconds)..."
     # Use the generic create command which takes the JSON config (including the key)
     # This avoids interactive prompts while using the robust CLI client
-    SC_RESPONSE=$(az devops service-endpoint create \
+    SC_RESPONSE=$(timeout 60 az devops service-endpoint create \
         --service-endpoint-configuration "$SC_CONFIG_FILE" \
         --organization "$ADO_ORG_URL" \
         --project "$ADO_PROJECT" \
@@ -275,9 +292,6 @@ EOF
     
     # Clean up config file immediately to protect secrets
     rm -f "$SC_CONFIG_FILE"
-    
-    # Debug: show response (truncated)
-    echo "CLI Response (first 500 chars): ${SC_RESPONSE:0:500}"
     
     SERVICE_ENDPOINT_ID=$(echo "$SC_RESPONSE" | jq -r '.id' 2>/dev/null || echo "")
     
