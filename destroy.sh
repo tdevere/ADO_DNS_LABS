@@ -156,12 +156,14 @@ destroy_ado_resources() {
     
     # Remove Project
     echo "Removing ADO project..."
-    if az devops project show --project "$ADO_PROJECT" --organization "$ADO_ORG_URL" &>/dev/null; then
-        az devops project delete \
-            --organization "$ADO_ORG_URL" \
-            --id "$ADO_PROJECT" \
-            --yes 2>/dev/null || true
-        echo -e "${GREEN}✅ ADO project removed${NC}"
+    PROJECT_ID=$(az devops project show --project "$ADO_PROJECT" --organization "$ADO_ORG_URL" --query id -o tsv 2>/dev/null)
+    if [ -n "$PROJECT_ID" ]; then
+        az devops project delete --organization "$ADO_ORG_URL" --id "$PROJECT_ID" --yes >> "$LOG_FILE" 2>&1
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✅ ADO project removed${NC}"
+        else
+            echo "Warning: Azure DevOps project may not have been deleted. Check permissions or project status."
+        fi
     else
         echo -e "${YELLOW}⏭️  ADO project not found (already removed)${NC}"
     fi

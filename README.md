@@ -51,7 +51,7 @@ Hands-on Azure DNS and private endpoint troubleshooting. After this single READM
    - Azure infrastructure (VNet, VM, Key Vault, DNS zones)
    - Self-hosted agent registered and running
    
-   **Takes ~5-10 minutes**. When complete, proceed to `docs/LAB_GUIDE.md`
+   **Takes ~5-10 minutes**. When complete, proceed to `labs/lab1/README.md`
 
 ---
 

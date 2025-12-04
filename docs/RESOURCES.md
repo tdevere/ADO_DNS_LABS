@@ -143,7 +143,7 @@ After understanding resource requirements:
 1. Ensure Azure subscription is ready
 2. Generate SSH keys
 3. Create Azure DevOps resources
-4. Continue to [LAB_GUIDE.md](LAB_GUIDE.md)
+4. Continue to [Lab 1](../labs/lab1/README.md)
 
 ---
 

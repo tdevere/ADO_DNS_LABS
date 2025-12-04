@@ -12,7 +12,7 @@ Your goal is to help students learn by guiding them through the "ADO_DNS_LABS" e
 1. Check if `terraform.tfstate` exists.
 2. Read the `key_vault_name` from `terraform output`.
 3. Use `sed` or file editing to update `pipeline.yml` with the KV name.
-4. Remind the user they need the 'LabConnection' Service Connection in ADO.
+4. Explain that the service connection (SC-DNSLAB-*) is auto-created by setup-pipeline.sh with all required Azure permissions.
 
 ## When asked to "Start Lab [1-3]":
 1. Run `terraform apply -var="lab_scenario=dns_exercise[N]"` (where N is the lab number).

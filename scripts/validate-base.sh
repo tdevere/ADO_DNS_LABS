@@ -1,10 +1,15 @@
 #!/bin/bash
 set -e
 
+# Determine script location and repo root
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
 echo "Base Environment Validation"
 
-KV_NAME=$(terraform output -raw key_vault_name)
-VM_IP=$(terraform output -raw vm_public_ip)
+# Run terraform output from repo root
+KV_NAME=$(cd "$REPO_ROOT" && terraform output -raw key_vault_name)
+VM_IP=$(cd "$REPO_ROOT" && terraform output -raw vm_public_ip)
 
 if [ -z "$KV_NAME" ] || [ -z "$VM_IP" ]; then
   echo "Missing terraform outputs. Run 'terraform apply' first."; exit 1

@@ -90,6 +90,11 @@ resource "azurerm_key_vault" "kv" {
   purge_protection_enabled    = false
   public_network_access_enabled = true # Baseline allows Terraform to seed secrets; Lab 2 break script disables this
 
+  network_acls {
+    default_action = "Allow"
+    bypass         = "AzureServices"
+  }
+
   access_policy {
     tenant_id = data.azurerm_client_config.current.tenant_id
     object_id = data.azurerm_client_config.current.object_id
@@ -123,8 +128,12 @@ resource "azurerm_key_vault" "kv" {
 
 resource "azurerm_key_vault_secret" "secret" {
   name         = "TestSecret"
-  value        = "HelloFromStandaloneLab"
+  value        = "HelloFromLab"
   key_vault_id = azurerm_key_vault.kv.id
+  
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 # Private Endpoint
