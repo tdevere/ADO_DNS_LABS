@@ -529,6 +529,15 @@ else
     
     if [ -n "$PIPELINE_ID" ] && [ "$PIPELINE_ID" != "null" ]; then
         echo -e "${GREEN}✅ Pipeline created (ID: $PIPELINE_ID).${NC}"
+        
+        # Disable pipeline so it doesn't run by default
+        echo "Disabling pipeline to prevent automatic runs..."
+        az pipelines update \
+            --id "$PIPELINE_ID" \
+            --organization "$ADO_ORG_URL" \
+            --project "$ADO_PROJECT" \
+            --enabled false >/dev/null 2>&1 || echo -e "${YELLOW}⚠️  Could not disable pipeline (non-critical).${NC}"
+        echo -e "${GREEN}✅ Pipeline disabled - will not run by default.${NC}"
     else
         echo -e "${YELLOW}⚠️  Could not create pipeline automatically.${NC}"
         echo -e "${RED}Error details:${NC}"
