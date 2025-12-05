@@ -21,11 +21,9 @@
         "shd101wyy.markdown-preview-enhanced"
       ],
       "settings": {
-        "markdown.preview.openMarkdownLinks": "inPreview",
-        "markdown-preview-enhanced.automaticallyShowPreviewOfMarkdownBeingEdited": true
+        "markdown.preview.openMarkdownLinks": "inPreview"
       }
     }
   },
-  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y dnsutils iputils-ping jq git-lfs",
-  "postAttachCommand": "code README.md && sleep 1 && code --command markdown.showPreviewToSide"
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y dnsutils iputils-ping jq git-lfs && code README.md && sleep 1 && code --command markdown.showPreviewToSide"
 }
