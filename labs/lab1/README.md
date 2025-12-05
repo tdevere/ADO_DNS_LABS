@@ -23,29 +23,53 @@ Investigate the DNS resolution issue preventing the build agent from accessing K
 
 ### Step 1: Simulate the Infrastructure Change
 
-Run this command to simulate what the infrastructure team changed Friday evening:
+Run this command to simulate the infrastructure issue:
 ```bash
 ./break-lab.sh lab1
 ```
 
-This represents an infrastructure change made outside your pipeline's control. The script runs silently (just like the infra team's change—they didn't announce what they modified).
+This represents an infrastructure change made outside your pipeline's control. The script runs silently (just like real-world undocumented changes).
 
 ### Step 2: Observe the Pipeline Failure
 
-Trigger your pipeline (or check the last run). You'll see this error in the "Validate Secret Retrieval" step:
+Trigger your pipeline in Azure DevOps. The deployment will fail during the Key Vault retrieval stage with timeout or 403 Forbidden errors.
 
-```
-=== Key Vault Access Test ===
-✗ FAILED: Unable to retrieve secret from Key Vault
+---
 
-Troubleshooting steps:
-1. Verify DNS resolution points to private endpoint IP
-2. Check VNet peering is configured
-3. Verify private DNS zone is linked to agent VNet
-4. Check service connection has Key Vault access policy
-```
+## 💡 TA Note: Before Escalating to Azure Networking Team
 
-**Key observation:** The `$(TestSecret)` variable is empty. The AzureKeyVault task couldn't fetch the secret at all.
+When troubleshooting private endpoint connectivity issues in production environments, Azure Support follows a systematic diagnostic process before escalating to specialized teams. This ensures the issue is well-documented and simple misconfigurations are caught early.
+
+### Standard Troubleshooting Workflow
+
+Before opening a collaboration ticket with the Azure Networking Team, complete these diagnostic steps:
+
+| Step | Description | Tools/Commands |
+|------|-------------|----------------|
+| **1. Run Guided Troubleshooter** | Perform initial diagnostics for DNS, NSG, and firewall issues | Azure Portal → Resource → Diagnose and Solve Problems |
+| **2. Validate DNS Zone Links** | Ensure private DNS zones are linked to relevant VNets | `az network private-dns link vnet list` |
+| **3. Test Endpoint Reachability** | Confirm connectivity to required endpoints over TLS 443 | `curl -v https://<endpoint>`, `telnet <ip> 443` |
+| **4. Review Network Policies** | Check NSGs, route tables, and subnet delegations | Network Watcher, `az network nsg rule list` |
+| **5. Verify Proxy Settings** | Ensure proxy variables are correctly configured | `echo $HTTP_PROXY`, `echo $HTTPS_PROXY` |
+| **6. Collect Evidence** | Attach GT results, Network Watcher logs, and diagrams | Screenshots, command output, architecture diagrams |
+
+### Why This Matters
+
+**In this lab:** You have full control of the environment and can fix issues directly. However, understanding this workflow prepares you for real-world scenarios where:
+
+- You may need to work with separate networking teams who control DNS/VNet configurations
+- Support engineers will ask for this data before escalating internally
+- Documenting your troubleshooting steps helps justify infrastructure changes to management
+
+### For This Exercise
+
+You'll focus on **Steps 2-3** (DNS validation and connectivity testing). In production, you'd complete all six steps before escalating. The goal is to identify the root cause using DNS diagnostic tools (`nslookup`, `dig`) and Azure Portal inspection.
+
+**Key Question to Answer:** Is the private DNS zone correctly configured to resolve the Key Vault FQDN to its private IP address?
+
+Once you've gathered diagnostic evidence:
+- ✅ **If you identify the issue:** Document the finding and implement the fix
+- ⚠️ **If the issue remains unclear:** This is when you'd escalate to the Azure Networking Team with your complete diagnostic data
 
 ---
 
