@@ -425,7 +425,7 @@ Use the **[EMAIL_TEMPLATE.md](./EMAIL_TEMPLATE.md)** file in this lab folder to 
 
 **Why send now?**
 
-In the real world, you would open this support case to get help queued up while you continue investigating. Even if you solve it yourself before they respond, documenting your investigation helps:
+In the real world, you would open this collaboration request to get help queued up while you continue investigating. Even if you solve it yourself before they respond, documenting your investigation helps:
 - Track progress for management/stakeholders
 - Create a paper trail for post-incident reviews
 - Get feedback on your troubleshooting approach
@@ -433,7 +433,7 @@ In the real world, you would open this support case to get help queued up while 
 
 You'll continue to STEP 6 to test DNS from the agent's perspective. You might discover the root cause yourself, but your instructor will see your investigation methodology and provide feedback.
 
-> 📚 **Real-World Pro Tip:** Don't wait until you're completely stuck to engage support. Open the case early with what you know, then update it as you learn more. This gets you in the queue faster and shows proactive problem-solving.
+> 📚 **Real-World Pro Tip:** Don't wait until you're completely stuck to engage support. Open the collaboration request early with what you know, then update it as you learn more. This gets you in the queue faster and shows proactive problem-solving.
 
 ---
 
