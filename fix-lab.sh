@@ -62,6 +62,15 @@ fi
 echo "✅ Lab $LAB_ID is now FIXED. Configuration restored to base state."
 echo "   Run the pipeline or check 'nslookup' to verify success."
 
+# Restore success message in Key Vault
+KV_NAME=$(terraform output -raw key_vault_name 2>/dev/null || echo "")
+if [ -n "$KV_NAME" ]; then
+    echo "Restoring success message in Key Vault..."
+    az keyvault secret set --vault-name "$KV_NAME" --name "AppMessage" \
+        --value "Welcome to the DNS Lab! Your pipeline is working correctly." >/dev/null
+    echo "✅ Key Vault message restored"
+fi
+
 # For Lab 3 specifically, the agent should come back online automatically
 if [ "$LAB_ID" == "lab3" ]; then
     echo ""

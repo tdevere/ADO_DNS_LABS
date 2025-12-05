@@ -127,8 +127,8 @@ resource "azurerm_key_vault" "kv" {
 }
 
 resource "azurerm_key_vault_secret" "secret" {
-  name         = "TestSecret"
-  value        = "HelloFromLab"
+  name         = "AppMessage"
+  value        = "Welcome to the DNS Lab! Your pipeline is working correctly."
   key_vault_id = azurerm_key_vault.kv.id
   
   lifecycle {
