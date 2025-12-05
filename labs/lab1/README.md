@@ -417,14 +417,23 @@ Use the **[EMAIL_TEMPLATE.md](./EMAIL_TEMPLATE.md)** file in this lab folder to 
 1. Open `labs/lab1/EMAIL_TEMPLATE.md`
 2. Fill in all the blanks with information from the table above
 3. Answer the Guided Troubleshooter questions in the email
-4. Describe the troubleshooting steps you've completed so far (STEP 1-5A)
-5. **SAVE YOUR DRAFT** (but don't send yet!)
+4. Describe the troubleshooting steps you've completed so far (STEP 1-5)
+5. **Send the email to your instructor**
 
-**Why draft but not send?**
+**To:** `your-instructor@email.com`  
+**Subject:** `Lab 1 - Azure Private DNS Investigation - [Your Name]`
 
-In the real world, you would send this now. But in this lab, you'll continue to STEP 6 to test DNS from the agent's perspective. You might discover the root cause yourself and solve it without escalating!
+**Why send now?**
 
-> 📚 **Real-World Pro Tip:** Even if you plan to troubleshoot yourself, drafting the collaboration email is valuable. The act of documenting the issue often helps you clarify the problem and identify gaps in your investigation.
+In the real world, you would open this support case to get help queued up while you continue investigating. Even if you solve it yourself before they respond, documenting your investigation helps:
+- Track progress for management/stakeholders
+- Create a paper trail for post-incident reviews
+- Get feedback on your troubleshooting approach
+- Build your professional communication skills
+
+You'll continue to STEP 6 to test DNS from the agent's perspective. You might discover the root cause yourself, but your instructor will see your investigation methodology and provide feedback.
+
+> 📚 **Real-World Pro Tip:** Don't wait until you're completely stuck to engage support. Open the case early with what you know, then update it as you learn more. This gets you in the queue faster and shows proactive problem-solving.
 
 ---
 
