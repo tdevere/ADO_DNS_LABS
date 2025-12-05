@@ -1,31 +1,21 @@
 # Lab 2: Private Endpoint Connectivity
 
-## 🎯 Overview
+## 📧 Background Story
 
-This exercise simulates a network connectivity failure where private endpoint access becomes unreliable. Your deployment pipeline intermittently fails to reach Azure Key Vault, despite infrastructure appearing properly configured. You'll need to investigate DNS resolution, network paths, and access policies to identify the root cause.
+> **Read the full scenario:** [SCENARIO.md](SCENARIO.md)
 
-> Tip: As a support engineer, remember the pipeline error is a symptom, not the root cause. Infrastructure issues (like DNS) often surface first as application failures (Key Vault access).
+You are Jordan Chen, DevOps Engineer at Contoso HealthTech Solutions. Three weeks after resolving the DNS A record issue (Lab 1), the pipeline is failing again with Key Vault access timeouts. This time DNS resolution looks correct (returns the private IP), but the agent still cannot establish a connection to the Key Vault private endpoint.
 
-## 🌍 Real-World Scenario
+Your manager wants you to follow the Azure Support troubleshooting workflow systematically before escalating to a support case.
 
-**Tuesday, 10:00 AM:** Your deployment pipeline suddenly fails with timeout errors accessing Azure Key Vault. The infrastructure team confirms "nothing changed" overnight. Private DNS zones exist, the private endpoint shows healthy status in the portal, and the agent VM can ping other resources without issue.
+---
 
-**What you observe:**
-- Pipeline fails to retrieve secrets from Key Vault
-- No obvious errors in Azure Portal
-- Private endpoint resource shows "Succeeded" state
-- DNS infrastructure appears intact
+## 🎯 Your Mission
 
-**Your task:**
-- Investigate why private endpoint connectivity is broken
-- Use DNS and network diagnostic tools to narrow scope
-- Identify which layer(s) of the network stack are failing
-- No one documented the change
-
-**Your mission:** Figure out why DNS is returning the public IP and restore private connectivity.
+Investigate why the build agent cannot reach the Key Vault private endpoint despite DNS resolving correctly to the private IP address. Validate the Private DNS zone VNet links and network path to identify the root cause.
 
 > **Real-World Context**
-> This happens when a new application team spins up a VNet and assumes they can use the "centrally managed" Private DNS Zone, but forgets to link it. Or when an IaC pipeline runs in a different order than expected, creating the zone before the link. The confusing part? DNS "works" – it just returns the wrong answer (public IP). Traffic might succeed if public access is enabled, masking the misconfiguration.
+> This happens when a new application team spins up a VNet and assumes they can use the "centrally managed" Private DNS Zone, but forgets to link it. Or when an IaC pipeline runs in a different order than expected, creating the zone before the link. The confusing part? DNS resolution "works" (returns an IP), but network connectivity fails because the VNet cannot actually route to that private IP.
 
 ## 🏗️ Lab Architecture
 
@@ -73,20 +63,61 @@ Analogy cheat sheet:
 
 ---
 
-## 💥 Start the Scenario
+## 💥 Start the Lab
 
-To start this exercise, you will self-inject a fault into the environment to simulate a real-world outage.
+### Step 1: Simulate the Infrastructure Change
 
-1. **Run the scenario script:**
-   ```bash
-   ./break-lab.sh lab2
-   ```
+Run this command to simulate the infrastructure issue:
+```bash
+./break-lab.sh lab2
+```
 
-   > **Your Role:** Once this script finishes, you are the on-call engineer. The application team reports the deployment pipeline is failing with connectivity errors to Key Vault.
+This represents an infrastructure change made outside your pipeline's control. The script runs silently (just like real-world undocumented changes).
 
-2. **Verify the failure by running the pipeline:**
+### Step 2: Observe the Pipeline Failure
 
-Go to Azure DevOps and queue a new run of the `DNS-Lab-Pipeline`. The pipeline should fail during the "Fetch Secrets from Key Vault" task.
+Trigger your pipeline in Azure DevOps. The deployment will fail during the Key Vault retrieval stage with timeout or "Public network access is disabled" errors.
+
+---
+
+## 💡 TA Note: Before Escalating to Azure Networking Team
+
+When troubleshooting private endpoint connectivity issues in production environments, Azure Support follows a systematic diagnostic process before escalating to specialized teams. This ensures the issue is well-documented and simple misconfigurations are caught early.
+
+### Standard Troubleshooting Workflow
+
+Before opening a collaboration ticket with the Azure Networking Team, complete these diagnostic steps:
+
+| Step | Description | Tools/Commands |
+|------|-------------|----------------|
+| **1. Run Guided Troubleshooter** | Perform initial diagnostics for DNS, NSG, and firewall issues | Azure Portal → Resource → Diagnose and Solve Problems |
+| **2. Validate DNS Zone Links** | Ensure private DNS zones are linked to relevant VNets | `az network private-dns link vnet list` |
+| **3. Test Endpoint Reachability** | Confirm connectivity to required endpoints over TLS 443 | `curl -v https://<endpoint>`, `telnet <ip> 443` |
+| **4. Review Network Policies** | Check NSGs, route tables, and subnet delegations | Network Watcher, `az network nsg rule list` |
+| **5. Verify Proxy Settings** | Ensure proxy variables are correctly configured | `echo $HTTP_PROXY`, `echo $HTTPS_PROXY` |
+| **6. Collect Evidence** | Attach GT results, Network Watcher logs, and diagrams | Screenshots, command output, architecture diagrams |
+
+### Why This Matters
+
+**In this lab:** You have full control of the environment and can fix issues directly. However, understanding this workflow prepares you for real-world scenarios where:
+
+- You may need to work with separate networking teams who control DNS/VNet configurations
+- Support engineers will ask for this data before escalating internally
+- Documenting your troubleshooting steps helps justify infrastructure changes to management
+
+### For This Exercise
+
+You'll focus on **Step 2** (validating Private DNS zone VNet links). In production, you'd complete all six steps before escalating. The goal is to identify why DNS resolution works but network connectivity fails.
+
+**Key Question to Answer:** Is the Private DNS zone properly linked to the VNet where the build agent resides?
+
+Once you've gathered diagnostic evidence:
+- ✅ **If you identify the issue:** Document the finding and implement the fix
+- ⚠️ **If the issue remains unclear:** This is when you'd escalate to the Azure Networking Team with your complete diagnostic data
+
+---
+
+## 🔍 Investigation: Systematic Troubleshooting
 
 **Expected Pipeline Failure:**
 ```text
