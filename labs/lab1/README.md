@@ -192,8 +192,8 @@ As a support engineer investigating an issue, you need to understand the custome
 - ☐ VPN or ExpressRoute
 
 **How to find the answer:**
-- Check Terraform config: `main.tf` (search for `azurerm_private_endpoint`)
-- Or Azure Portal → **Key Vault** → **Networking** → **Private endpoint connections**
+- Azure Portal → **Key Vault** → **Networking** → **Private endpoint connections**
+- Or Azure CLI: `az network private-endpoint list --query "[?contains(privateLinkServiceConnections[0].privateLinkServiceId, 'vault')].{Name:name, IP:customDnsConfigs[0].ipAddresses[0]}" -o table`
 
 **Your Answer:** `___________________`
 
@@ -378,9 +378,9 @@ Options:
 **Your Answer (write in your notes):** _____________________
 
 <details>
-<summary>💡 Hint: Check the Terraform configuration</summary>
+<summary>💡 Hint: Check the Azure Portal</summary>
 
-The VNet is configured to use Azure-provided DNS (168.63.129.16) with a Private DNS Zone for `privatelink.vaultcore.azure.net`. Select **"Azure Private DNS Zone"**.
+Check Azure Portal → **Virtual Networks** → Select your VNet → **Settings** → **DNS servers**. The VNet uses Azure-provided DNS (168.63.129.16) with a Private DNS Zone for `privatelink.vaultcore.azure.net`. Select **"Azure Private DNS Zone"**.
 </details>
 
 ---
@@ -398,11 +398,11 @@ Before creating a collaboration request, gather the following details:
 
 | Information | How to Collect | Notes |
 |-------------|----------------|-------|
-| **Key Vault FQDN** | `terraform output -raw key_vault_name` + `.vault.azure.net` | Used for DNS testing |
+| **Key Vault FQDN** | Azure Portal → Key Vault → Properties → Vault URI<br>OR `az keyvault list --query "[0].properties.vaultUri" -o tsv` | Used for DNS testing |
 | **Key Vault Resource URI** | Azure Portal → Key Vault → Properties → Resource ID | Full ARM path |
 | **Private Endpoint IP** | `az network private-endpoint list --query "[?contains(name, 'pe-keyvault')].customDnsConfigs[0].ipAddresses[0]" -o tsv` | Expected IP for DNS A record |
 | **Private DNS Zone Name** | `privatelink.vaultcore.azure.net` | Zone hosting the A record |
-| **Agent VNet Name** | `terraform output -raw vnet_name` | Where agent VM resides |
+| **Agent VNet Name** | Azure Portal → Virtual Networks → List VNets<br>OR `az network vnet list --query "[?contains(name, 'dns-lab')].name" -o tsv` | Where agent VM resides |
 | **Issue Start Time** | Azure DevOps pipeline failure timestamp | When first failure occurred |
 | **Error Message** | Copy from Azure DevOps pipeline logs | Exact error text |
 | **Last Successful Run** | Azure DevOps pipeline history | Timestamp of last working run |
@@ -433,7 +433,10 @@ In the real world, you would send this now. But in this lab, you'll continue to 
 Now check what the agent sees. Get the VM connection details:
 
 ```bash
-VM_IP=$(terraform output -raw vm_public_ip)
+# Option 1: Azure Portal → Virtual Machines → Select agent VM → Overview → Public IP address
+
+# Option 2: Azure CLI
+VM_IP=$(az vm list-ip-addresses --query "[?contains(virtualMachine.name, 'dns-lab-agent')].virtualMachine.network.publicIpAddresses[0].ipAddress" -o tsv)
 echo "Agent VM Public IP: ${VM_IP}"
 ```
 
@@ -450,15 +453,20 @@ ssh azureuser@${VM_IP}
 
 *Note: If SSH hangs or times out, check the Network Security Group allows port 22 from your IP:*
 ```bash
+# Get the resource group name first
+RG_NAME=$(az group list --query "[?contains(name, 'rg-dns-lab')].name" -o tsv)
+
+# Then check NSG rules
 az network nsg rule list \
-  --resource-group $(terraform output -raw resource_group_name) \
+  --resource-group $RG_NAME \
   --nsg-name nsg-agent-vm -o table
 ```
 
 **Once connected to the VM**, test DNS from the agent's perspective:
 
 ```bash
-KV_NAME="kv-dns-lab-c4cbb3dd"  # Get this from pipeline logs or terraform output
+# Get Key Vault name from pipeline logs or Azure Portal → Key Vaults
+KV_NAME="kv-dns-lab-c4cbb3dd"
 nslookup ${KV_NAME}.vault.azure.net
 ```
 
@@ -486,14 +494,16 @@ Address: 10.1.2.50
 
 **Goal:** Find out what IP address the Key Vault private endpoint is *actually* using in Azure.
 
-In the real world, you won't always have Terraform outputs handy. Here are the ways to find the "Source of Truth":
+In the real world, you need to find the "Source of Truth" from Azure directly (not IaC state files). Here are the methods support engineers use:
 
 | Method | How to do it | Pros/Cons |
-|--------|--------------|-----------|
+|--------|--------------|-----------|>
 | **Azure Portal** | Search for "Private Endpoints" → Click the endpoint → Look at "Network Interface" → "Private IP". | **Easiest** visual check. Slow if you have many subscriptions. |
 | **Azure CLI** | `az network private-endpoint show ...` | **Fastest** for automation. Requires knowing resource names. |
 | **PowerShell** | `Get-AzPrivateEndpoint ...` | Good for Windows admins. |
-| **Terraform State** | `terraform output` | **Unreliable during outages.** State might be stale (drift) or locked. |
+| **REST API** | `GET https://management.azure.com/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Network/privateEndpoints/{name}?api-version=2023-04-01` | Direct Azure Resource Manager query. |
+
+> ⚠️ **Why not Terraform/Bicep/ARM state?** During an outage, IaC state may be stale (drift), locked, or inaccessible. Always verify against Azure's control plane directly.
 
 **Task:** Use the Azure CLI method (since we are in a terminal) to find the real IP.
 
@@ -565,7 +575,7 @@ az network private-dns record-set a show \
 **How does this happen in production?**
 - **"Fat Finger" Error:** Someone manually edited the DNS record.
 - **Stale Records:** A private endpoint was deleted and recreated (getting a new IP), but the DNS record wasn't updated.
-- **Drift:** Terraform state is out of sync with Azure reality.
+- **Configuration Drift:** Azure resources were modified outside of your deployment process (manual Portal changes, scripts, other automation).
 
 ---
 
@@ -632,7 +642,7 @@ It should now succeed (green checkmarks everywhere)! 🎉
 
 **What you learned:**
 1. **Split-Horizon DNS:** How Azure uses Private DNS Zones to override public DNS for private endpoints.
-2. **The "Source of Truth":** Why you should trust the Azure Resource (Private Endpoint) over Terraform state or DNS records during an outage.
+2. **The "Source of Truth":** Why you should trust the Azure Resource (Private Endpoint) over IaC state files or DNS records during an outage.
 3. **Troubleshooting Flow:** 
    - Scope the issue (Who/What/Where).
    - Check the basics (nslookup).
