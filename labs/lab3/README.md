@@ -1,22 +1,21 @@
-# Lab 3: The Silent Agent Outage
+# Lab 3: Custom DNS Server Misconfiguration
 
-## 🎯 The Situation
+## 📧 Background Story
 
-**Wednesday, 2:00 PM: The Call 📞**
+> **Read the full scenario:** [SCENARIO.md](SCENARIO.md)
 
-Your team takes a **Priority 1** call. The CI/CD team reports that their self-hosted build agents have suddenly gone offline. They can't run any deployments.
+You are Jordan Chen, DevOps Engineer at Contoso HealthTech Solutions. After successfully resolving two previous DNS incidents over the past six weeks (Lab 1: wrong A record, Lab 2: missing VNet link), you've become the team's DNS expert. Now the build agent has gone completely offline and cannot resolve any Azure service domains.
 
-"We haven't touched the agent configuration," they insist. "They were working fine this morning. Now they just show 'Offline' in Azure DevOps."
+Your investigation reveals the VNet is configured to use a custom DNS server (10.1.2.50) that isn't working correctly. Your manager wants you to carefully diagnose the custom DNS setup and determine the appropriate resolution approach.
 
-**What the CI/CD team tells you:**
-- "All agents in the `DNS-Lab-Pool` are offline."
-- "We can't even queue a build to debug it."
-- "We heard the networking team deployed a new 'security-hardened' DNS solution this afternoon."
+---
 
-**Your mission:** You're the support engineer. The agents are down, so you can't use pipeline logs to troubleshoot. You need to SSH into the agent VM, investigate why it lost connectivity to Azure DevOps, and determine if the new DNS solution is to blame.
+## 🎯 Your Mission
+
+Investigate why the build agent cannot resolve any Azure service FQDNs (dev.azure.com, *.vault.azure.net). The VNet is configured to use a custom DNS server instead of Azure's default resolver. Determine whether to remove the custom DNS configuration or fix the custom DNS server's forwarding rules.
 
 > **Real-World Context**
-> Self-hosted agents rely on DNS to reach `dev.azure.com`. When organizations switch to custom DNS servers (BIND, Windows DNS, Infoblox) without configuring proper forwarding for public Azure endpoints, agents lose connectivity instantly. This manifests as a "silent outage"—no error logs in the portal, just offline agents.
+> Self-hosted agents rely on DNS to reach `dev.azure.com`. When organizations switch to custom DNS servers (BIND, Windows DNS, Infoblox) without configuring proper forwarding for Azure endpoints, agents lose connectivity instantly. This manifests as a "silent outage"—no error logs in the portal, just offline agents.
 
 ---
 
@@ -149,31 +148,69 @@ Unlike Labs 1-2 where the VNet used Azure's built-in DNS, this environment has a
 
 ---
 
-## 🚀 Start the Lab
+## 💥 Start the Lab
 
-### Step 1: Break the Environment
+### Step 1: Simulate the Infrastructure Change
 
-Run the break script to simulate the networking team's DNS changes:
-
+Run this command to simulate the custom DNS configuration:
 ```bash
 ./break-lab.sh lab3
 ```
 
-**What just happened?**
-- The script updated the VNet to use a custom DNS server (10.1.2.50).
-- **The agent went offline.**
-- You can no longer run pipelines.
+This represents a custom DNS server deployment made outside your pipeline's control. The script configures the VNet to use a custom DNS server instead of Azure's default resolver.
 
-### Step 2: Observe the Failure
+### Step 2: Observe the Agent Offline
 
-1. Go to **Azure DevOps** → **Project Settings** → **Agent Pools** → **DNS-Lab-Pool**.
-2. Observe that your agent is **Offline**.
-3. Try to queue a pipeline run. It will sit in "Queued" state indefinitely.
+1. Go to **Azure DevOps** → **Project Settings** → **Agent Pools** → **DNS-Lab-Pool**
+2. Observe that your agent is **Offline**
+3. Try to queue a pipeline run - it will sit in "Queued" state indefinitely
 
-**Key observation:** 
-- This isn't a pipeline error—it's an infrastructure outage.
-- The agent can't talk to Azure DevOps at all.
-- Since Azure DevOps is a public service (`dev.azure.com`), this means the agent can't resolve public DNS names correctly.
+**Key Observation:** This isn't a pipeline error—it's an infrastructure outage. The agent cannot communicate with Azure DevOps at all.
+
+---
+
+## 💡 TA Note: Before Escalating to Azure Networking Team
+
+When troubleshooting private endpoint connectivity issues in production environments, Azure Support follows a systematic diagnostic process before escalating to specialized teams. This ensures the issue is well-documented and simple misconfigurations are caught early.
+
+### Standard Troubleshooting Workflow
+
+**Note:** Lab 3 involves custom DNS infrastructure, which falls under **Step 4: Review Network Policies**. Custom DNS servers are a common enterprise requirement but require proper configuration to work with Azure Private DNS zones.
+
+Before opening a collaboration ticket with the Azure Networking Team, complete these diagnostic steps:
+
+| Step | Description | Tools/Commands |
+|------|-------------|----------------|
+| **1. Run Guided Troubleshooter** | Perform initial diagnostics for DNS, NSG, and firewall issues | Azure Portal → Resource → Diagnose and Solve Problems |
+| **2. Validate DNS Zone Links** | Ensure private DNS zones are linked to relevant VNets | `az network private-dns link vnet list` |
+| **3. Test Endpoint Reachability** | Confirm connectivity to required endpoints over TLS 443 | `curl -v https://<endpoint>`, `telnet <ip> 443` |
+| **4. Review Network Policies** | Check NSGs, route tables, subnet delegations, **and VNet DNS server settings** | Network Watcher, `az network nsg rule list`, `az network vnet show --query dhcpOptions.dnsServers` |
+| **5. Verify Proxy Settings** | Ensure proxy variables are correctly configured | `echo $HTTP_PROXY`, `echo $HTTPS_PROXY` |
+| **6. Collect Evidence** | Attach GT results, Network Watcher logs, and diagrams | Screenshots, command output, architecture diagrams |
+
+### Why This Matters
+
+**In this lab:** You have full control of the environment and can fix issues directly. However, understanding this workflow prepares you for real-world scenarios where:
+
+- Custom DNS servers are managed by separate networking/infrastructure teams
+- Support engineers will ask for this data before escalating internally
+- Documenting your troubleshooting steps helps justify infrastructure changes to management
+- You may need to explain why custom DNS requires specific forwarding rules
+
+### For This Exercise
+
+You'll focus on **Step 4** (reviewing VNet DNS configuration and custom DNS server setup). In production, you'd complete all six steps before escalating. The goal is to understand why the custom DNS server is preventing Azure service resolution.
+
+**Key Questions to Answer:**
+- Is the VNet configured to use a custom DNS server instead of Azure's default (168.63.129.16)?
+- Is the custom DNS server properly configured to forward Azure service queries to Azure DNS?
+- Does the custom DNS server need conditional forwarding rules for *.azure.com, *.vault.azure.net, etc.?
+
+**Critical Concept:** When using custom DNS servers in Azure VNets, those servers MUST forward queries for Azure services to Azure's recursive resolver (168.63.129.16). Without proper forwarding, Private DNS zones cannot be queried, and all Azure service resolution fails.
+
+Once you've gathered diagnostic evidence:
+- ✅ **If you identify the issue:** Document the finding and implement the fix (VNet DNS settings or custom DNS forwarding)
+- ⚠️ **If the issue remains unclear:** This is when you'd escalate to the Azure Networking Team with your complete diagnostic data
 
 ---
 
