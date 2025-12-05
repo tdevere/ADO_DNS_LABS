@@ -433,7 +433,7 @@ In the real world, you would open this collaboration request to get help queued 
 
 You'll continue to STEP 6 to test DNS from the agent's perspective. You might discover the root cause yourself, but your instructor will see your investigation methodology and provide feedback.
 
-> 📚 **Real-World Pro Tip:** Don't wait until you're completely stuck to engage support. Open the collaboration request early with what you know, then update it as you learn more. This gets you in the queue faster and shows proactive problem-solving.
+> 📚 **Real-World Pro Tip:** For **critical production outages**, open the collaboration request as soon as you have the required information documented (resource IDs, error messages, timestamps, basic diagnostics). Don't wait until you're completely stuck—but also don't open requests without the needed collaboration data. Incomplete requests get rejected or delayed, wasting everyone's time.
 
 ---
 
