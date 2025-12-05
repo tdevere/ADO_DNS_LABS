@@ -27,10 +27,15 @@ Hands-on Azure DNS and private endpoint troubleshooting. After this single READM
 
 ## 🚀 Quick Start
 
-1. **Environment Variables**
+1. **Configure Environment Variables**
    
-   Your codespace has `.ado.env` pre-configured with:
-   - `ADO_ORG_URL` - Your Azure DevOps organization URL
+   Copy the example file and configure your Azure DevOps details:
+   ```bash
+   cp .ado.env.example .ado.env
+   ```
+   
+   Edit `.ado.env` and provide:
+   - `ADO_ORG_URL` - Your Azure DevOps organization URL (e.g., https://dev.azure.com/yourorg)
    - `ADO_PAT` - Personal Access Token (required scopes: Agent Pools, Service Connections, Build, Code, Project and Team)
    - `ADO_PROJECT` - Project name (default: ADO-DNS-Lab)
    - `ADO_POOL` - Agent pool name (default: DNS-Lab-Pool)

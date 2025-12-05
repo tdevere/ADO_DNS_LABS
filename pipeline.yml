@@ -19,7 +19,7 @@ stages:
     steps:
     - task: AzureKeyVault@2
       displayName: 'Get Message from Key Vault'
-      timeoutInMinutes: 2
+      timeoutInMinutes: 0.5
       inputs:
         ConnectedServiceName: 'SC-DNSLAB-1764957302'  # Replaced by setup-pipeline.sh
         KeyVaultName: '$(KeyVaultName)'

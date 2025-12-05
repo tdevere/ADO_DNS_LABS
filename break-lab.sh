@@ -62,7 +62,7 @@ VNET_LINK_NAME="link-vnet-dns-lab"
 
 case $LAB_ID in
     lab1)
-        echo "Injecting Lab 1 fault (wrong A record)..."
+        echo "Injecting Lab 1 fault..."
         # Try update first; if it fails, recreate with bad IP
         if ! silent az network private-dns record-set a update \
                 --resource-group "$RG_NAME" --zone-name "$ZONE_NAME" --name "$KV_NAME" \
@@ -73,6 +73,15 @@ case $LAB_ID in
         # Update Key Vault secret with error message
         silent az keyvault secret set --vault-name "$KV_NAME" --name "AppMessage" \
             --value "ERROR: DNS pointing to wrong IP! Fix the A record in Private DNS zone."
+        
+        # Restart the agent to pick up DNS changes
+        echo "Restarting self-hosted agent..."
+        VM_NAME=$(terraform output -raw vm_name 2>/dev/null)
+        if [ -n "$VM_NAME" ]; then
+            silent az vm restart --resource-group "$RG_NAME" --name "$VM_NAME"
+            echo "✓ Agent VM restarted"
+        fi
+        
         echo "✅ Lab 1 fault injected. Begin troubleshooting."
         ;;
     lab2)
@@ -83,13 +92,22 @@ case $LAB_ID in
         # Update Key Vault secret with error message
         silent az keyvault secret set --vault-name "$KV_NAME" --name "AppMessage" \
             --value "ERROR: Cannot resolve private endpoint! Check VNet link in Private DNS zone."
+        
+        # Restart the agent to pick up DNS changes
+        echo "Restarting self-hosted agent..."
+        VM_NAME=$(terraform output -raw vm_name 2>/dev/null)
+        if [ -n "$VM_NAME" ]; then
+            silent az vm restart --resource-group "$RG_NAME" --name "$VM_NAME"
+            echo "✓ Agent VM restarted"
+        fi
+        
         echo "✅ Lab 2 fault injected."
         echo ""
         echo "Next: Run the pipeline to reproduce the failure."
         echo "Go to Azure DevOps and queue a new run of 'DNS-Lab-Pipeline'."
         ;;
     lab3)
-        echo "Injecting Lab 3 fault (custom DNS server)..."
+        echo "Injecting Lab 3 fault..."
         silent az network vnet update --resource-group "$RG_NAME" --name "$VNET_NAME" --dns-servers 10.1.2.50
         # Update Key Vault secret with error message
         silent az keyvault secret set --vault-name "$KV_NAME" --name "AppMessage" \
