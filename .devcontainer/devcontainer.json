@@ -23,7 +23,7 @@
       "settings": {
         "markdown.preview.openMarkdownLinks": "inPreview",
         "workbench.editorAssociations": {
-          "*.md": "default"
+          "*.md": "vscode.markdown.preview.editor"
         }
       }
     }
