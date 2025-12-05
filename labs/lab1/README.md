@@ -316,31 +316,9 @@ The pipeline can no longer retrieve the `AppMessage` secret from Key Vault via t
 
 ---
 
-### STEP 5: Establish Baseline and Prepare for Support Escalation
+### STEP 5: Run Azure Guided Troubleshooter and Prepare Collaboration Request
 
-#### STEP 5A: Test from Your Perspective (Baseline)
-
-Before checking the agent, verify Key Vault is healthy from the public internet:
-
-```bash
-KV_NAME=$(terraform output -raw key_vault_name)
-nslookup ${KV_NAME}.vault.azure.net
-```
-
-**Expected output:**
-```
-Non-authoritative answer:
-Name:   kv-dns-lab-c4cbb3dd.vault.azure.net
-Address: 13.66.138.88    # Public IP (13.x, 20.x, or 52.x range)
-```
-
-✓ **What this proves:** Key Vault exists and DNS works publicly. The service itself is healthy.
-
----
-
-#### STEP 5B: Run Azure Guided Troubleshooter and Prepare Collaboration Request
-
-Now that you've established baseline connectivity and identified the agent cannot reach the Key Vault, this is where you would use the **Azure Guided Troubleshooter** if escalating to Azure Support.
+You've identified that the agent cannot reach the Key Vault. This is where you would use the **Azure Guided Troubleshooter** if escalating to Azure Support.
 
 **Access Guided Troubleshooter:**
 1. Navigate to **Azure Portal** → **Key Vault** → **Diagnose and Solve Problems**
