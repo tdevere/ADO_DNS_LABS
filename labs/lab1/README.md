@@ -1,23 +1,21 @@
 # Lab 1: Access Reliability Scenario
 
-## 🎯 The Situation
+## 📧 Background Story
 
-**Monday, 9:00 AM:** Your team's deployment pipeline suddenly started failing. The build agent can't retrieve secrets from Key Vault. 
+> **Read the full scenario:** [SCENARIO.md](SCENARIO.md)
 
-**What you know:**
-- The pipeline worked fine on Friday
-- No one touched the pipeline YAML or agent configuration over the weekend
-- Developers are blocked and asking what's wrong
+You are Jordan Chen, DevOps Engineer at Contoso HealthTech Solutions. Your application developer Maya reported that the patient portal deployment pipeline has been failing since this morning with Key Vault access errors. After initial investigation, you discovered the build agent is resolving the Key Vault FQDN to a public IP instead of the private endpoint IP.
 
-**What you don't know:**
-- On Friday evening, the infrastructure team made some "routine maintenance changes" to the Azure networking resources
-- They didn't mention it because "nothing customer-facing changed"
-- The change wasn't documented in your team's change log
+Your manager has opened a Microsoft support case, but you want to dig deeper while waiting for their response.
 
-**Your mission:** Figure out why the pipeline can't connect to Key Vault and restore service.
+---
+
+## 🎯 Your Mission
+
+Investigate the DNS resolution issue preventing the build agent from accessing Key Vault via its private endpoint. Use diagnostic tools and Azure Portal to identify the root cause and restore pipeline functionality.
 
 > **Real-World Context**
-> This scenario happens constantly in production. Someone makes a "small infrastructure change" (updates a DNS record, modifies a VNet link, changes a firewall rule) without realizing it will break a pipeline. You can't just "re-run Terraform" because you don't control those resources, or the Terraform state is out of sync with reality. You need to diagnose what actually changed in Azure and fix it manually before you can update your IaC.
+> This scenario mirrors common production incidents where infrastructure changes (DNS records, VNet links, firewall rules) break pipelines unexpectedly. You can't always wait for support or "re-run Terraform" when IaC state is out of sync with reality. You need to diagnose what changed in Azure and fix it manually.
 
 ---
 
