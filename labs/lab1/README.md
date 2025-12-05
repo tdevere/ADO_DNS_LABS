@@ -150,35 +150,83 @@ Troubleshooting DNS:
 
 ---
 
-### STEP 3: Build the Architecture Context (Ask Questions)
+### STEP 3: Gather Architecture Context and Update Email Draft
 
-As a support engineer, you need to understand the customer's setup before diagnosing. Ask these questions:
+As a support engineer investigating an issue, you need to understand the customer's architecture before proceeding with diagnostics. This information will be required when escalating to Azure Support.
+
+**Your Task:** Answer the following questions and add them to your collaboration email draft.
+
+---
+
+#### Architecture Discovery Questions
 
 **Q1: Where does the pipeline run?**
-- Microsoft-hosted agent (runs in Azure's shared infrastructure)?
-- Self-hosted agent (customer's own machine/VM)?
+- ☐ Microsoft-hosted agent (runs in Azure's shared infrastructure)
+- ☐ Self-hosted agent (customer's own machine/VM)
 
-**A1:** Check your pipeline definition or Azure DevOps → Project Settings → Agent Pools → DNS-Lab-Pool  
-Answer: `___________________`
+**How to find the answer:**
+- Check Azure DevOps → **Pipelines** → **DNS-Lab-Pipeline** → View YAML
+- Look for `pool:` section
+- Or check: Azure DevOps → **Project Settings** → **Agent Pools** → **DNS-Lab-Pool**
+
+**Your Answer:** `___________________`
+
+---
 
 **Q2: Where is the Azure resource the pipeline needs to access?**
 - What service? (Storage Account, Key Vault, Container Registry, etc.)
 - Public endpoint or Private Endpoint?
 
-**A2:** Look at the error: "Unable to retrieve secret from Key Vault"  
-Answer: `___________________`
+**How to find the answer:**
+- Review the pipeline error: "Unable to retrieve secret from Key Vault"
+- Check Azure Portal → **Key Vaults** → Select your Key Vault → **Networking**
+- Look for "Private endpoint connections" section
 
-**Q3: How do they connect?**
-- Over public internet?
-- Through Azure Private Link (private networking)?
-- VPN or ExpressRoute?
-
-**A3:** Check Terraform config or Azure Portal → Key Vault → Networking  
-Answer: `___________________`
+**Your Answer:** `___________________`
 
 ---
 
-**Now you can draw the architecture:**
+**Q3: How do they connect?**
+- ☐ Over public internet
+- ☐ Through Azure Private Link (private networking)
+- ☐ VPN or ExpressRoute
+
+**How to find the answer:**
+- Check Terraform config: `main.tf` (search for `azurerm_private_endpoint`)
+- Or Azure Portal → **Key Vault** → **Networking** → **Private endpoint connections**
+
+**Your Answer:** `___________________`
+
+---
+
+#### Update Your Email Draft
+
+Open your **[EMAIL_TEMPLATE.md](./EMAIL_TEMPLATE.md)** draft from STEP 5B and add this architecture information to the **"Additional Context"** section:
+
+**Example text to add:**
+```
+## Architecture Details
+
+**Pipeline Execution Environment:**
+- Pipeline runs on: Self-hosted agent VM (DNS-Lab-Pool)
+- Agent VM location: Azure VNet 10.1.0.0/16
+- Agent VM uses Azure-provided DNS (168.63.129.16)
+
+**Target Resource:**
+- Service: Azure Key Vault
+- Connectivity: Private Endpoint (10.1.2.5)
+- Private DNS Zone: privatelink.vaultcore.azure.net
+
+**Connection Method:**
+- Agent connects to Key Vault via Private Link (private networking)
+- Public endpoint is disabled on Key Vault
+```
+
+💾 **Save your updated email draft.** You'll add more diagnostic findings in the next steps.
+
+---
+
+**Now you can visualize the architecture:**
 
 ```mermaid
 graph TD
