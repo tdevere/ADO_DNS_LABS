@@ -121,25 +121,21 @@ Once you've gathered diagnostic evidence:
 
 **Expected Pipeline Failure:**
 ```text
-Starting: Fetch Secrets from Key Vault
+Starting: Get Message from Key Vault
 ==============================================================================
 Task         : Azure Key Vault
 Description  : Download Azure Key Vault secrets
-Version      : 2.259.2
-Author       : Microsoft Corporation
-Help         : https://docs.microsoft.com/azure/devops/pipelines/tasks/deploy/azure-key-vault
 ==============================================================================
-SubscriptionId: fcfa67ae-efeb-417c-a966-48b4937d2918.
-Key vault name: kv-dns-lab-c56368d5.
-Downloading secret value for: TestSecret.
+Key vault name: kv-dns-lab-<xxxxx>.
+Downloading secret value for: AppMessage.
 ##[error]
-TestSecret: "Public network access is disabled and request is not from a trusted service 
+AppMessage: "Public network access is disabled and request is not from a trusted service 
 nor via an approved private link.
-Caller: appid=***;oid=5b710bd4-3ad8-48da-966f-d487510739cb;iss=https://sts.windows.net/...
-Vault: kv-dns-lab-c56368d5;location=westus2. The specified Azure service connection needs 
-to have Get, List secret management permissions on the selected key vault..."
-Uploading /home/azureuser/azagent/_work/1/ProvisionKeyVaultPermissions.ps1 as attachment
-Finishing: Fetch Secrets from Key Vault
+Caller: appid=***;oid=...
+Vault: kv-dns-lab-<xxxxx>;location=westus2."
+
+##[error]Failed to retrieve AppMessage from Key Vault
+This usually indicates a DNS resolution issue with the private endpoint.
 ```
 
 ---
@@ -203,19 +199,15 @@ Before logging into the agent or diving into Azure resources, gather basic infor
 
 **Expected Pipeline Output:**
 ```
-Starting: Fetch Secrets from Key Vault
+Starting: Get Message from Key Vault (RetrieveConfig stage)
 ==============================================================================
 Task         : Azure Key Vault
 Description  : Download Azure Key Vault secrets
-Version      : 2.259.2
-Author       : Microsoft Corporation
-Help         : https://docs.microsoft.com/azure/devops/pipelines/tasks/deploy/azure-key-vault
 ==============================================================================
-SubscriptionId: fcfa67ae-efeb-417c-a966-48b4937d2918.
-Key vault name: kv-dns-lab-c56368d5.
-Downloading secret value for: TestSecret.
+Key vault name: kv-dns-lab-<xxxxx>.
+Downloading secret value for: AppMessage.
 ##[error]
-TestSecret: "Public network access is disabled and request is not from a trusted service nor via an approved private link.
+AppMessage: "Public network access is disabled and request is not from a trusted service nor via an approved private link.
 ```
 
 > **Tip:** The error message gives you clues, but doesn't tell you the full story. You'll need to investigate DNS resolution to understand *why* the agent is trying to use the public network.
@@ -374,7 +366,12 @@ This script will:
 2. Find your failed pipeline run
 3. Click **"Rerun failed jobs"**
 
-The pipeline should now succeed - the "Fetch Secrets from Key Vault" task will complete successfully and the pipeline will show green checkmarks. 🎉
+The pipeline should now succeed:
+1. **RetrieveConfig stage**: Gets AppMessage from Key Vault ✓
+2. **Build stage**: Creates and packages Node.js app ✓
+3. **Deploy stage**: Runs app with the message, displays success ✓
+
+All stages show green checkmarks. 🎉
 
 ---
 

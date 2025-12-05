@@ -107,7 +107,7 @@ Before diving into Azure resources, gather basic information about the failure. 
    - Answer: `___________________`
 
 **For this lab scenario:**
-- Stage: "Key Vault Secret Access" → "Fetch Secrets from Key Vault" (AzureKeyVault@2 task)
+- Stage: "RetrieveConfig" → "Get Message from Key Vault" (AzureKeyVault@2 task)
 - Agent: Self-hosted Linux agent in Azure VM
 - History: Last successful run was Friday; failed Monday morning
 - Changes: **No** pipeline changes, **no** agent updates
@@ -122,8 +122,14 @@ Before diving into Azure resources, gather basic information about the failure. 
 Look at the pipeline log output. What does it tell you?
 
 ```
-=== Key Vault Access Test ===
-✗ FAILED: Unable to retrieve secret from Key Vault
+##[error]Failed to retrieve AppMessage from Key Vault
+This usually indicates a DNS resolution issue with the private endpoint.
+
+Troubleshooting DNS:
+  1. Check DNS resolution: nslookup <keyvault>.vault.azure.net
+  2. Verify IP is in private endpoint range (10.1.2.0/24)
+  3. Check Private DNS zone VNet link exists
+  4. Verify A record in Private DNS zone
 ```
 
 **Decode the Error Signal:**
@@ -136,8 +142,8 @@ Look at the pipeline log output. What does it tell you?
 | **"Connection Refused"** | **Service Down / Blocked** <br> Reached IP, but port 443 is closed or blocked. | Check NSG, Firewall rules. |
 
 **For this scenario:**
-- The `$(TestSecret)` variable is empty.
-- The task likely timed out or failed silently without an HTTP status code.
+- The `$(AppMessage)` variable is empty or the task times out.
+- The RetrieveConfig stage fails, blocking subsequent Build and Deploy stages.
 - **Conclusion:** This is a **Connectivity Issue**. The agent can't find or reach the Key Vault.
 
 **Action Plan:** Focus on **Network & DNS**, not permissions.

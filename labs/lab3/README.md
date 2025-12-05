@@ -56,7 +56,8 @@ terraform apply -var="lab_scenario=base" \
 **5. Verify the pipeline works:**
 - Go to Azure DevOps → Pipelines
 - Run the "DNS-Lab-Pipeline"
-- It should succeed and fetch the `TestSecret` from Key Vault
+- All three stages should succeed: RetrieveConfig, Build, Deploy
+- The Deploy stage should display the success message from AppMessage
 
 ### Before Starting This Lab
 
@@ -79,7 +80,7 @@ terraform output
 > 
 > If you see this error when running `terraform apply -var="lab_scenario=base"`:
 > ```
-> Error: making Read request on Azure KeyVault Secret TestSecret: 
+> Error: making Read request on Azure KeyVault Secret AppMessage: 
 > keyvault.BaseClient#GetSecret: Failure responding to request: StatusCode=403
 > Code="Forbidden" Message="Public network access is disabled..."
 > ```
@@ -638,12 +639,13 @@ nslookup ${KV_NAME}.vault.azure.net
 **Run your Azure DevOps pipeline:**
 1. Go to Azure DevOps → Pipelines
 2. Queue a new run
-3. Watch the "Fetch Secrets from Key Vault" step
+3. Watch the three stages execute: RetrieveConfig, Build, Deploy
 
 **Success criteria:**
-- ✅ Pipeline completes successfully
-- ✅ "Fetch Secrets from Key Vault" step shows green checkmark
-- ✅ No "public network access" errors
+- ✅ RetrieveConfig stage: Successfully retrieves AppMessage from Key Vault
+- ✅ Build stage: Creates and packages Node.js app
+- ✅ Deploy stage: Runs app and displays success message
+- ✅ No "public network access" or DNS resolution errors
 
 If the pipeline still fails, revisit the DNS configuration and verify the custom DNS server is forwarding `*.privatelink.*` queries to Azure DNS (168.63.129.16).
 
