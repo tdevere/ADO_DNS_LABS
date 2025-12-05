@@ -268,7 +268,9 @@ The pipeline can no longer retrieve the `AppMessage` secret from Key Vault via t
 
 ---
 
-### STEP 5: Test from Your Perspective (Baseline)
+### STEP 5: Establish Baseline and Prepare for Support Escalation
+
+#### STEP 5A: Test from Your Perspective (Baseline)
 
 Before checking the agent, verify Key Vault is healthy from the public internet:
 
@@ -285,6 +287,118 @@ Address: 13.66.138.88    # Public IP (13.x, 20.x, or 52.x range)
 ```
 
 ✓ **What this proves:** Key Vault exists and DNS works publicly. The service itself is healthy.
+
+---
+
+#### STEP 5B: Run Azure Guided Troubleshooter and Prepare Collaboration Request
+
+Now that you've established baseline connectivity and identified the agent cannot reach the Key Vault, this is where you would use the **Azure Guided Troubleshooter** if escalating to Azure Support.
+
+**Access Guided Troubleshooter:**
+1. Navigate to **Azure Portal** → **Key Vault** → **Diagnose and Solve Problems**
+2. Select **"Connectivity Issues"** → **"Private Endpoint Connectivity"**
+3. Or visit: [Azure Networking Guided Troubleshooter](https://portal.azure.com/#blade/Microsoft_Azure_Support/NetworkingGuidedTroubleshooterBlade)
+
+**Answer the Guided Questions Below:**
+
+---
+
+**Question 1: Are the resources involved connected to or passing through an Azure Network resource?**
+
+Options:
+- ☐ Yes, resources are hosted in a Virtual Network or are under Microsoft.Network or Microsoft.CDN resource providers
+- ☐ No, resources are outside of a Virtual Network and/or Microsoft.Network or Microsoft.CDN resource providers
+- ☐ This is a request for assistance recovering deleted networking resources
+
+**Your Answer (write in your notes):** _____________________
+
+<details>
+<summary>💡 Hint: Where is the agent VM located?</summary>
+
+The agent VM is in VNet `10.1.0.0/16`, and the Key Vault has a private endpoint in that same VNet. Select **"Yes, resources are hosted in a Virtual Network"**.
+</details>
+
+---
+
+**Question 2: Which option best describes the problem prompting your collaboration with Azure Networking?**
+
+Options:
+- ☐ Domain Name System (DNS) resolution issue
+- ☐ Network connectivity or performance issue
+- ☐ Application layer issues related to HTTP/HTTPS or TLS
+- ☐ Other
+
+**Your Answer (write in your notes):** _____________________
+
+<details>
+<summary>💡 Hint: What error is the pipeline showing?</summary>
+
+The RetrieveConfig stage times out connecting to Key Vault. This suggests DNS resolution might be returning the wrong IP address. Select **"Domain Name System (DNS) resolution issue"**.
+</details>
+
+---
+
+**Question 3: What type of DNS solution is the customer running?**
+
+Options:
+- ☐ Azure Traffic Manager
+- ☐ Azure Public DNS Zone
+- ☐ Azure Private DNS Zone
+- ☐ Azure Private Resolver
+- ☐ Azure-Provided DNS (168.63.129.16)
+- ☐ Windows Custom DNS Server
+- ☐ 3rd party DNS solution
+
+**Your Answer (write in your notes):** _____________________
+
+<details>
+<summary>💡 Hint: Check the Terraform configuration</summary>
+
+The VNet is configured to use Azure-provided DNS (168.63.129.16) with a Private DNS Zone for `privatelink.vaultcore.azure.net`. Select **"Azure Private DNS Zone"**.
+</details>
+
+---
+
+**Guided Troubleshooter Result:**
+
+Based on these answers, the troubleshooter will route you to:
+
+**Support Category:** `SAP Azure / Azure DNS / DNS Resolution Failures / Issues resolving Private DNS records`  
+**Team:** Azure Private DNS Team
+
+**Required Information to Collect:**
+
+Before creating a collaboration request, gather the following details:
+
+| Information | How to Collect | Notes |
+|-------------|----------------|-------|
+| **Key Vault FQDN** | `terraform output -raw key_vault_name` + `.vault.azure.net` | Used for DNS testing |
+| **Key Vault Resource URI** | Azure Portal → Key Vault → Properties → Resource ID | Full ARM path |
+| **Private Endpoint IP** | `az network private-endpoint list --query "[?contains(name, 'pe-keyvault')].customDnsConfigs[0].ipAddresses[0]" -o tsv` | Expected IP for DNS A record |
+| **Private DNS Zone Name** | `privatelink.vaultcore.azure.net` | Zone hosting the A record |
+| **Agent VNet Name** | `terraform output -raw vnet_name` | Where agent VM resides |
+| **Issue Start Time** | Azure DevOps pipeline failure timestamp | When first failure occurred |
+| **Error Message** | Copy from Azure DevOps pipeline logs | Exact error text |
+| **Last Successful Run** | Azure DevOps pipeline history | Timestamp of last working run |
+
+---
+
+**Next Step: Draft Collaboration Email**
+
+Use the **[EMAIL_TEMPLATE.md](./EMAIL_TEMPLATE.md)** file in this lab folder to draft your collaboration request.
+
+**Instructions:**
+1. Open `labs/lab1/EMAIL_TEMPLATE.md`
+2. Fill in all the blanks with information from the table above
+3. Answer the Guided Troubleshooter questions in the email
+4. Describe the troubleshooting steps you've completed so far (STEP 1-5A)
+5. **SAVE YOUR DRAFT** (but don't send yet!)
+
+**Why draft but not send?**
+
+In the real world, you would send this now. But in this lab, you'll continue to STEP 6 to test DNS from the agent's perspective. You might discover the root cause yourself and solve it without escalating!
+
+> 📚 **Real-World Pro Tip:** Even if you plan to troubleshoot yourself, drafting the collaboration email is valuable. The act of documenting the issue often helps you clarify the problem and identify gaps in your investigation.
 
 ---
 

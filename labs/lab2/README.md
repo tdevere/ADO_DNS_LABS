@@ -300,6 +300,13 @@ az network private-dns link vnet list \
 
 ### STEP 5: Verify the DNS Zone Has the Correct Record
 
+> 💡 **Reminder:** If you need to escalate this issue to Azure Support, refer to the **Azure Guided Troubleshooter workflow** in [Lab 1 STEP 5B](../lab1/README.md#step-5b-run-azure-guided-troubleshooter-and-prepare-collaboration-request). For this lab's DNS issue, you would answer:
+> - **Q1:** Yes (resources in VNet)
+> - **Q2:** DNS resolution issue
+> - **Q3:** Azure Private DNS Zone
+>
+> Use the [EMAIL_TEMPLATE.md](../lab1/EMAIL_TEMPLATE.md) to draft your collaboration request if needed.
+
 Even though the link is missing, let's confirm the zone itself is configured correctly:
 
 ```bash

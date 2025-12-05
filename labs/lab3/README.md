@@ -462,6 +462,13 @@ kv-dns-lab-xxxxxxxx.privatelink.vaultcore.azure.net. 10 IN A 10.1.2.5
 
 ### STEP 5: Inspect the Custom DNS Server
 
+> 💡 **Reminder:** If you need to escalate this issue to Azure Support, refer to the **Azure Guided Troubleshooter workflow** in [Lab 1 STEP 5B](../lab1/README.md#step-5b-run-azure-guided-troubleshooter-and-prepare-collaboration-request). For this lab's DNS issue, you would answer:
+> - **Q1:** Yes (resources in VNet)
+> - **Q2:** DNS resolution issue
+> - **Q3:** Custom DNS Server (NOT Azure Private DNS Zone)
+>
+> Use the [EMAIL_TEMPLATE.md](../lab1/EMAIL_TEMPLATE.md) to draft your collaboration request. **Note:** Custom DNS server issues may require customer's DNS administrator involvement, as Microsoft Support cannot directly access customer-managed DNS infrastructure.
+
 The custom DNS server is the key to understanding this failure.
 
 **Your mission:**
