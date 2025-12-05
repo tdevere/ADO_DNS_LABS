@@ -50,7 +50,18 @@ check_azure_login() {
     echo -e "\n${BLUE}2️⃣  Checking Azure Login...${NC}"
     if ! az account show &> /dev/null; then
         echo -e "${YELLOW}⚠️  Not logged in. Launching login...${NC}"
-        az login --use-device-code
+        
+        # Load tenant from .ado.env if available
+        if [ -f ".ado.env" ]; then
+            source .ado.env
+        fi
+        
+        if [ -n "$AZURE_TENANT" ]; then
+            echo -e "${BLUE}Using tenant: $AZURE_TENANT${NC}"
+            az login --tenant "$AZURE_TENANT" --use-device-code
+        else
+            az login --use-device-code
+        fi
     fi
     
     SUB_NAME=$(az account show --query name -o tsv)
@@ -63,6 +74,9 @@ setup_ado() {
     if [ -f ".ado.env" ]; then
         echo -e "${GREEN}✅ Found existing configuration (.ado.env)${NC}"
         source .ado.env
+        
+        # Set PAT for Azure DevOps CLI
+        export AZURE_DEVOPS_EXT_PAT="$ADO_PAT"
         
         # Verify the project exists
         echo "Verifying ADO project exists..."

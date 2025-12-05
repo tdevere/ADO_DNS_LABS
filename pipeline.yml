@@ -91,11 +91,25 @@ stages:
         console.log('Configuration retrieved from Azure Key Vault');
         console.log('via Private Endpoint with Private DNS Zone');
         console.log('');
-        console.log('MESSAGE:', message);
+        console.log('✓ Secret successfully retrieved and available to application');
+        console.log('✓ Message length:', message.length, 'characters');
         console.log('');
-        console.log('='.repeat(60));
-        console.log('✓ Lab completed successfully!');
-        console.log('='.repeat(60) + '\n');
+        
+        // Check if message indicates an error condition
+        if (message.includes('ERROR')) {
+          console.log('⚠️  Configuration indicates a problem:');
+          console.log('   Message starts with:', message.substring(0, 30) + '...');
+          console.log('');
+          console.log('='.repeat(60));
+          console.log('✗ Lab exercise detected - troubleshoot DNS configuration');
+          console.log('='.repeat(60) + '\n');
+          process.exit(1);
+        } else {
+          console.log('='.repeat(60));
+          console.log('✓ Lab completed successfully!');
+          console.log('='.repeat(60) + '\n');
+          process.exit(0);
+        }
         INDEXJS
         
         echo "✓ Application files created"

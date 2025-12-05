@@ -12,7 +12,19 @@ command -v jq >/dev/null || { echo "❌ jq is not installed."; exit 1; }
 
 # 2. Azure Login
 echo "Checking Azure Login..."
-az account show >/dev/null 2>&1 || az login
+if ! az account show >/dev/null 2>&1; then
+    # Load tenant from .ado.env if available
+    if [ -f ".ado.env" ]; then
+        source .ado.env
+    fi
+    
+    if [ -n "$AZURE_TENANT" ]; then
+        echo "Using tenant: $AZURE_TENANT"
+        az login --tenant "$AZURE_TENANT" --use-device-code
+    else
+        az login --use-device-code
+    fi
+fi
 
 echo "Select the Subscription to use:"
 az account list --query "[].{Name:name, ID:id}" -o table

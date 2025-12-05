@@ -112,8 +112,8 @@ chmod 644 "$SSH_PUB_KEY_PATH" 2>/dev/null || true
 echo -e "${BLUE}Testing SSH connectivity to $VM_IP...${NC}"
 if ! ssh -o StrictHostKeyChecking=no -o ConnectTimeout=12 -o BatchMode=yes -i "$SSH_KEY_PATH" "azureuser@$VM_IP" "echo 'SSH OK'" 2>/dev/null; then
     echo -e "${YELLOW}⚠️  Direct SSH failed. Attempting automated recovery...${NC}"
-    RG_NAME="$(terraform output -raw resource_group_name 2>/dev/null || echo '')"
-    VM_NAME="$(terraform output -raw vm_name 2>/dev/null || echo '')"
+    RG_NAME="$(cd "$REPO_ROOT" && terraform output -raw resource_group_name 2>/dev/null || echo '')"
+    VM_NAME="$(cd "$REPO_ROOT" && terraform output -raw vm_name 2>/dev/null || echo '')"
     if [ -z "$VM_NAME" ]; then
         # Fallback: discover VM by public IP
         VM_NAME=$(az vm list -d --query "[?publicIps=='$VM_IP'].name | [0]" -o tsv 2>/dev/null || echo "")
