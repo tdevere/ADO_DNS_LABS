@@ -191,21 +191,6 @@ Use this template to draft your collaboration request to Azure Networking Suppor
 
 ---
 
-## Contact Information
-
-**Primary Contact:**
-- Name: _____________________
-- Email: _____________________
-- Phone: _____________________
-- Availability: _____________________
-
-**Secondary Contact (Technical):**
-- Name: _____________________
-- Email: _____________________
-- Phone: _____________________
-
----
-
 ## Attachments
 
 1. `pipeline-failure-screenshot.png`
