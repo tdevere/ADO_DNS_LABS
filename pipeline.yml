@@ -8,7 +8,7 @@ pool:
 
 variables:
   - name: KeyVaultName
-    value: 'kv-dns-lab-d2296a55'  # Placeholder replaced by setup-pipeline.sh
+    value: 'kv-dns-lab-07ce8120'  # Placeholder replaced by setup-pipeline.sh
 
 stages:
 - stage: RetrieveConfig
@@ -21,7 +21,7 @@ stages:
       displayName: 'Get Message from Key Vault'
       timeoutInMinutes: 2
       inputs:
-        ConnectedServiceName: 'SC-DNSLAB-1764880901'  # Replaced by setup-pipeline.sh
+        ConnectedServiceName: 'SC-DNSLAB-1764957302'  # Replaced by setup-pipeline.sh
         KeyVaultName: '$(KeyVaultName)'
         SecretsFilter: 'AppMessage'
         RunAsPreJob: false
@@ -120,7 +120,7 @@ EOF
     - task: AzureKeyVault@2
       displayName: 'Retrieve Message from Key Vault'
       inputs:
-        ConnectedServiceName: 'SC-DNSLAB-1764880901'
+        ConnectedServiceName: 'SC-DNSLAB-1764957302'
         KeyVaultName: '$(KeyVaultName)'
         SecretsFilter: 'AppMessage'
 
