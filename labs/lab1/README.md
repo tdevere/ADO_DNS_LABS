@@ -239,26 +239,32 @@ graph TD
 
 ---
 
-### STEP 4: Use the Pipeline History (The "Time Machine")
+### STEP 4: Compare Current vs. Previous Pipeline Runs
 
-Before you even touch the command line, look at the evidence you already have.
+Before you SSH into the agent, compare pipeline runs to identify what changed.
 
-**1. Check the "DNS Resolution Validation" Stage**
-This pipeline has a dedicated diagnostic stage that runs `nslookup` before trying to fetch secrets.
-- Go to the **failed run** logs.
-- Expand the **DNS Resolution Validation** stage.
-- Look at the output of `nslookup`.
-- **What IP did it see?** (Likely `10.1.2.50`)
+**1. Navigate to Pipeline History**
+- In Azure DevOps, go to **Pipelines** → **DNS-Lab-Pipeline**
+- Click on **Runs** to see the history
+- Compare the **last successful run** (before break-lab.sh) with the **current failing run**
 
-**2. Compare with a Successful Run**
-- Go to the **last successful run** (from Friday).
-- Expand the same **DNS Resolution Validation** stage.
-- **What IP did it see then?** (Likely `10.1.2.4`)
+**2. Last Successful Run (before Lab 1 break):**
+- ✅ RetrieveConfig stage: Completes successfully (~30 seconds)
+- ✅ Build stage: Creates Node.js app artifact
+- ✅ Deploy stage: Shows `✓ Lab completed successfully!` with message length
+
+**3. Current Failing Run (after Lab 1 break):**
+- ❌ RetrieveConfig stage: Times out after 60 seconds or shows connection error
+- ❌ Build stage: Never executes (blocked by RetrieveConfig failure)
+- ❌ Deploy stage: Never executes
+- Error message: `##[error]Failed to retrieve AppMessage from Key Vault`
 
 **The "Aha!" Moment:**
-By simply comparing the logs, you can prove the DNS resolution changed between Friday and Monday. You didn't need SSH, you didn't need Azure permissions—you just needed the logs.
+The pipeline can no longer retrieve the `AppMessage` secret from Key Vault via the private endpoint. The RetrieveConfig stage is failing on the AzureKeyVault@2 task, which means the agent cannot connect to the Key Vault's private endpoint.
 
-> **Pro Tip:** If a customer doesn't have a diagnostic step, ask them to add a simple `script` task to their pipeline to run `nslookup <target>` and `curl -v <target>`. This is often faster than getting VPN/Bastion access.
+**Key Observation:** This is a **connectivity issue between the agent and the Key Vault's private endpoint**, not a permissions problem (the service connection hasn't changed).
+
+> **Pro Tip:** If a customer doesn't have detailed pipeline logging, ask them to add a `bash` task before the Key Vault task to run `nslookup <keyvault>.vault.azure.net`. This captures DNS resolution from the agent's perspective in the pipeline logs.
 
 ---
 
