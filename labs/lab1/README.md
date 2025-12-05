@@ -437,9 +437,95 @@ You'll continue to STEP 6 to test DNS from the agent's perspective. You might di
 
 ---
 
-### STEP 6: Test from the Agent's Perspective (Where It Fails)
+### STEP 6: Analyze What We Know and Plan Data Collection
 
-Now check what the agent sees. Get the VM connection details:
+Before jumping into commands, let's think like a support engineer. Review what you've learned so far and identify what's still missing.
+
+---
+
+#### 📊 What We Know (From STEP 1-5)
+
+| Evidence | What It Tells Us |
+|----------|------------------|
+| **Pipeline fails at RetrieveConfig stage** | Agent cannot connect to Key Vault |
+| **Error: "Failed to retrieve AppMessage"** | Connection timeout or unreachable endpoint |
+| **Architecture: Self-hosted agent in VNet** | Agent is inside the private network |
+| **Key Vault has Private Endpoint** | Should be accessible via private IP (10.x range) |
+| **Private DNS Zone exists** | `privatelink.vaultcore.azure.net` is configured |
+| **Guided Troubleshooter result** | Points to "Azure Private DNS Zone" issue |
+| **Service connection hasn't changed** | Rules out permissions/authentication issues |
+
+---
+
+#### ❓ What We DON'T Know Yet (Critical Gaps)
+
+To diagnose a DNS issue, we need to compare **what the agent is getting** vs. **what it should get**.
+
+| Missing Data | Why We Need It | How It Helps Us |
+|--------------|----------------|-----------------|
+| **What IP does the agent's DNS resolve to?** | The agent might be getting: <br>• Public IP (DNS zone not linked)<br>• Wrong private IP (A record misconfigured)<br>• No response (DNS server down) | Tells us if DNS resolution is working at all, and if so, what IP it returns |
+| **What IP SHOULD the agent get?** | Need the "Source of Truth" from Azure:<br>• The actual Private Endpoint IP address | Gives us the correct value to compare against |
+| **What does the DNS A record say?** | The Private DNS Zone might have:<br>• Correct IP (problem is elsewhere)<br>• Wrong IP (A record misconfigured)<br>• No record (never created) | Shows if the DNS zone configuration matches the Private Endpoint |
+
+---
+
+#### 🎯 Action Plan: Collect the Missing Data
+
+We need to gather three pieces of evidence:
+
+```
+1. DNS Resolution from Agent → What IP does nslookup return?
+2. Private Endpoint Real IP → What IP does Azure say the endpoint uses?
+3. Private DNS Zone A Record → What IP is configured in the DNS zone?
+```
+
+**Then we can compare:**
+- If DNS ≠ Private Endpoint IP → **A record is wrong**
+- If DNS = Private Endpoint IP but connection fails → **Network/Firewall issue**
+- If DNS returns public IP → **VNet link missing** (Lab 2 scenario)
+
+---
+
+#### 🧠 Networking Fundamentals: Why This Matters
+
+**Understanding DNS in Private Networking:**
+
+When you use Azure Private Link, DNS resolution works differently than public internet:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Without Private Link (Public DNS)                           │
+├─────────────────────────────────────────────────────────────┤
+│ 1. App queries: kv-name.vault.azure.net                     │
+│ 2. Public DNS returns: 20.50.1.100 (public IP)             │
+│ 3. Traffic goes over internet                               │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ With Private Link (Split-Horizon DNS)                       │
+├─────────────────────────────────────────────────────────────┤
+│ 1. App queries: kv-name.vault.azure.net                     │
+│ 2. Private DNS Zone intercepts and returns: 10.1.2.5       │
+│ 3. Traffic stays within private VNet                        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**The Problem:**
+If the Private DNS Zone A record points to the **wrong private IP**, the agent connects to the wrong server (or a black hole), causing timeouts.
+
+**Your mission:** Collect the three data points above to identify if the A record is misconfigured.
+
+---
+
+### STEP 7: Collect Data #1 - DNS Resolution from Agent
+
+**Goal:** Discover what IP address the agent VM resolves when it queries the Key Vault FQDN.
+
+**Why from the agent?** The agent is inside the private network. DNS resolution from your Codespace (outside the VNet) will give different results than what the agent sees.
+
+---
+
+#### Get VM Connection Details
 
 ```bash
 # Option 1: Azure Portal → Virtual Machines → Select agent VM → Overview → Public IP address
@@ -449,18 +535,23 @@ VM_IP=$(az vm list-ip-addresses --query "[?contains(virtualMachine.name, 'dns-la
 echo "Agent VM Public IP: ${VM_IP}"
 ```
 
-**Connect to the agent VM:**
+---
 
-The VM uses password authentication (stored in Key Vault). For this lab, use the VM's public IP to SSH from your Codespace:
+#### Connect to the Agent VM
+
+The VM uses password authentication. For this lab, use the VM's public IP to SSH from your Codespace:
 
 ```bash
-# Simple connection (will prompt for password)
 ssh azureuser@${VM_IP}
 ```
 
-*(In this lab, SSH simulates using a Bastion Host. In real life, you might rely on the pipeline logs you analyzed in Step 4.)*
+*(In this lab, SSH simulates using a Bastion Host. In production, you might not have direct VM access—you'd rely on pipeline logs or Azure Run Command.)*
 
-*Note: If SSH hangs or times out, check the Network Security Group allows port 22 from your IP:*
+<details>
+<summary>🔧 Troubleshooting: SSH Connection Issues</summary>
+
+If SSH hangs or times out, check the Network Security Group allows port 22 from your IP:
+
 ```bash
 # Get the resource group name first
 RG_NAME=$(az group list --query "[?contains(name, 'rg-dns-lab')].name" -o tsv)
@@ -471,18 +562,22 @@ az network nsg rule list \
   --nsg-name nsg-agent-vm -o table
 ```
 
-**Once connected to the VM**, test DNS from the agent's perspective:
+If your IP is not allowed, you may need to add an inbound rule temporarily.
+</details>
+
+---
+
+#### Test DNS Resolution
+
+Once connected to the VM, test DNS from the agent's perspective:
 
 ```bash
 # Get Key Vault name from pipeline logs or Azure Portal → Key Vaults
 KV_NAME="kv-dns-lab-c4cbb3dd"
+
+# Test DNS resolution
 nslookup ${KV_NAME}.vault.azure.net
 ```
-
-**What you're looking for:**
-- Does it return an IP address?
-- What IP address? (Should be 10.1.2.x for private endpoint)
-- Is it different from what you saw in Step 4?
 
 **Example output:**
 ```
@@ -494,156 +589,358 @@ Name:   kv-dns-lab-c4cbb3dd.vault.azure.net
 Address: 10.1.2.50
 ```
 
-✓ **Good sign:** Got a private IP (10.x range)  
-✗ **Red flag:** Is this the *correct* private endpoint IP?
+---
+
+#### Record Your Finding
+
+**Data Point #1: DNS Resolution from Agent**
+
+Write down the IP address returned:
+
+```
+Agent resolved IP: ___________________
+```
+
+**What does this tell us?**
+- ✓ **Private IP (10.x.x.x):** DNS resolution is using the Private DNS Zone
+- ✗ **Public IP (13.x, 20.x, 52.x):** VNet link might be missing (Lab 2 scenario)
+- ✗ **No response / NXDOMAIN:** DNS server or zone configuration issue
+
+For this lab, you should see a **private IP** (10.x range). But is it the **correct** private IP? Let's find out in STEP 8.
+
+**Exit the VM** (type `exit`) and return to your Codespace terminal.
 
 ---
 
-### STEP 7: Find the Truth (What Should It Be?)
+### STEP 8: Collect Data #2 - Private Endpoint Real IP
 
-**Goal:** Find out what IP address the Key Vault private endpoint is *actually* using in Azure.
+**Goal:** Find the "Source of Truth" - what IP address does the Private Endpoint actually use in Azure?
 
-In the real world, you need to find the "Source of Truth" from Azure directly (not IaC state files). Here are the methods support engineers use:
+**Why this matters:** The Private Endpoint has a real IP address assigned by Azure. If DNS points somewhere else, the agent can't connect.
 
-| Method | How to do it | Pros/Cons |
-|--------|--------------|-----------|>
-| **Azure Portal** | Search for "Private Endpoints" → Click the endpoint → Look at "Network Interface" → "Private IP". | **Easiest** visual check. Slow if you have many subscriptions. |
-| **Azure CLI** | `az network private-endpoint show ...` | **Fastest** for automation. Requires knowing resource names. |
-| **PowerShell** | `Get-AzPrivateEndpoint ...` | Good for Windows admins. |
-| **REST API** | `GET https://management.azure.com/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Network/privateEndpoints/{name}?api-version=2023-04-01` | Direct Azure Resource Manager query. |
+---
 
-> ⚠️ **Why not Terraform/Bicep/ARM state?** During an outage, IaC state may be stale (drift), locked, or inaccessible. Always verify against Azure's control plane directly.
+#### Methods to Find the Source of Truth
 
-**Task:** Use the Azure CLI method (since we are in a terminal) to find the real IP.
+You have multiple options. Choose the one you're most comfortable with:
 
-Exit the VM (type `exit`) and return to your Codespace terminal, then run:
+| Method | How to do it | When to Use |
+|--------|--------------|-------------|
+| **Azure Portal** | Search for "Private Endpoints" → Click endpoint → "Network Interface" → "Private IP" | Visual learners, exploring unfamiliar subscriptions |
+| **Azure CLI** | `az network private-endpoint show ...` | Automation, scripting, or when you know resource names |
+| **PowerShell** | `Get-AzPrivateEndpoint ...` | Windows environments, existing PowerShell workflows |
+| **REST API** | `GET` to Azure Resource Manager endpoint | Advanced automation, custom tooling |
+
+> ⚠️ **Why not IaC state files?** During an outage, Terraform/Bicep/ARM state may be stale (drift), locked, or inaccessible. Always verify against Azure's control plane directly.
+
+---
+
+#### Option A: Azure Portal Method
+
+1. Go to **Azure Portal** → Search for "Private Endpoints"
+2. Find the endpoint with name containing `keyvault` or `kv-dns-lab`
+3. Click on it → Go to **Network Interface** in the left menu
+4. Look at **IP configurations** → Copy the **Private IP address**
+
+---
+
+#### Option B: Azure CLI Method (Recommended for this lab)
 
 ```bash
-# 1. Find the Resource Group name (if you don't know it)
-az group list --query "[?starts_with(name, 'rg-dns-lab')].name" -o tsv
+# 1. Find the Resource Group name
+RG_NAME=$(az group list --query "[?contains(name, 'rg-dns-lab')].name" -o tsv)
+echo "Resource Group: $RG_NAME"
 
 # 2. Get the Private Endpoint IP directly from Azure
-# (Replace <RG_NAME> with the name you found above)
 az network private-endpoint show \
-  --resource-group <RG_NAME> \
+  --resource-group $RG_NAME \
   --name pe-kv-dns-lab \
   --query "customDnsConfigs[0].ipAddresses[0]" -o tsv
 ```
 
 **Example output:**
 ```
-10.1.2.4
+10.1.2.5
 ```
 
-Write down both IPs:
-- DNS resolved IP (from Step 6): `_______`
-- Private endpoint real IP (from Step 7): `_______`
+---
+
+#### Record Your Finding
+
+**Data Point #2: Private Endpoint Real IP (Source of Truth)**
+
+Write down the IP address from Azure:
+
+```
+Private Endpoint IP: ___________________
+```
+
+**What this tells us:**
+This is the IP address the agent **should** be connecting to. If DNS returned a different IP in STEP 7, we've found a mismatch.
 
 ---
 
-### STEP 8: Compare (Are They the Same?)
+### STEP 9: Collect Data #3 - Private DNS Zone A Record
 
-| Source | IP | Match? |
-|--------|-----|---------|
-| DNS (from agent) | 10.1.2.50 | ? |
-| Private Endpoint (from Azure) | 10.1.2.4 | ? |
+**Goal:** Check what IP address is configured in the Private DNS Zone A record.
 
-**If they DON'T match:** You found the problem! DNS is pointing to the wrong IP.  
-**If they DO match:** The issue is elsewhere (network routing, firewall, permissions).
-
-For Lab 1, they should NOT match. Continue to understand why...
+**Why this matters:** Azure Private Endpoints use **Private DNS Zones** to map friendly names (like `kv-name.vault.azure.net`) to private IPs. If the A record is misconfigured, DNS will return the wrong IP.
 
 ---
 
-### STEP 9: Dig Deeper (Why Is DNS Wrong?)
-
-Azure Private Endpoints use **Private DNS Zones** to map friendly names like `kv-*.vault.azure.net` to private IPs. Let's inspect the DNS record to see what Azure *thinks* the IP is.
+#### Query the Private DNS Zone
 
 ```bash
-# 1. Get the Key Vault name (if you don't have it handy)
-KV_NAME=$(az keyvault list --resource-group <RG_NAME> --query "[0].name" -o tsv)
+# Use the resource group from STEP 8
+RG_NAME=$(az group list --query "[?contains(name, 'rg-dns-lab')].name" -o tsv)
 
-# 2. Check the A record in the Private DNS Zone
+# Get the Key Vault name
+KV_NAME=$(az keyvault list --resource-group $RG_NAME --query "[0].name" -o tsv)
+echo "Key Vault Name: $KV_NAME"
+
+# Check the A record in the Private DNS Zone
 az network private-dns record-set a show \
-  --resource-group <RG_NAME> \
+  --resource-group $RG_NAME \
   --zone-name privatelink.vaultcore.azure.net \
-  --name ${KV_NAME} \
+  --name $KV_NAME \
   --query "aRecords[0].ipv4Address" -o tsv
 ```
 
-**What you'll see:**
+**Example output:**
 ```
 10.1.2.50
 ```
 
-**Root Cause Analysis:**
-- **DNS Record:** Points to `10.1.2.50`
-- **Actual Resource:** Lives at `10.1.2.4`
-- **Result:** The agent tries to connect to `.50`, hits a black hole (or wrong server), and times out.
+---
 
-**How does this happen in production?**
-- **"Fat Finger" Error:** Someone manually edited the DNS record.
-- **Stale Records:** A private endpoint was deleted and recreated (getting a new IP), but the DNS record wasn't updated.
-- **Configuration Drift:** Azure resources were modified outside of your deployment process (manual Portal changes, scripts, other automation).
+#### Record Your Finding
+
+**Data Point #3: Private DNS Zone A Record**
+
+Write down the IP address configured in the DNS zone:
+
+```
+DNS A Record IP: ___________________
+```
+
+**What this tells us:**
+This is what the Private DNS Zone is telling VMs to use when they query the Key Vault FQDN. If this doesn't match the Private Endpoint IP (from STEP 8), the DNS zone has incorrect configuration.
 
 ---
 
-## 🛠️ Fix the Issue
+### STEP 10: Compare All Three Data Points and Send Findings
 
-You have two choices. As a Support Engineer, you often have to decide between a quick "Hotfix" to get production running and a "Proper" fix to ensure consistency.
+Now let's put all three pieces of evidence together and identify the root cause.
 
-### Option 1: The "Hotfix" (Manual Azure CLI)
-*Use this when production is down and you need immediate recovery.*
+---
+
+#### Comparison Table
+
+Fill in your findings from STEP 7, 8, and 9:
+
+| Data Source | IP Address | Your Value |
+|-------------|------------|------------|
+| **DNS Resolution from Agent** (STEP 7) | What the agent gets when it queries DNS | `___________` |
+| **Private Endpoint Real IP** (STEP 8) | What Azure says the endpoint uses | `___________` |
+| **Private DNS Zone A Record** (STEP 9) | What the DNS zone is configured with | `___________` |
+
+---
+
+#### Root Cause Identification
+
+**Compare the values:**
+
+✅ **If all three match:**
+- DNS is correctly configured
+- Problem is elsewhere (firewall, NSG, routing)
+- This is NOT the scenario for Lab 1
+
+❌ **If DNS A Record ≠ Private Endpoint IP:**
+- **Root Cause:** DNS A record is misconfigured
+- **Why it breaks:** Agent queries DNS → gets wrong IP → tries to connect → fails
+- **This IS the scenario for Lab 1**
+
+**Expected findings for Lab 1:**
+- DNS Resolution from Agent: `10.1.2.50` (wrong)
+- Private Endpoint Real IP: `10.1.2.5` (correct)
+- DNS A Record: `10.1.2.50` (matches DNS resolution, but wrong)
+
+**Conclusion:** The Private DNS Zone A record points to the wrong IP address.
+
+---
+
+#### How Does This Happen in Production?
+
+| Scenario | Description |
+|----------|-------------|
+| **"Fat Finger" Error** | Someone manually edited the DNS record and made a typo |
+| **Stale Records** | Private endpoint was deleted and recreated with a new IP, but DNS wasn't updated |
+| **Configuration Drift** | Resources were modified outside your deployment process (manual Portal changes, scripts, other automation) |
+| **Automation Bug** | Deployment script or IaC template had incorrect IP hardcoded |
+
+---
+
+#### Send Findings to Instructor
+
+Now that you've identified the root cause, send an update to your instructor.
+
+**To:** `your-instructor@email.com`  
+**Subject:** `Lab 1 - Root Cause Identified - [Your Name]`
+
+**Email body should include:**
+
+```
+Hi [Instructor Name],
+
+I've completed the data collection and identified the root cause:
+
+ROOT CAUSE: Private DNS Zone A record misconfiguration
+
+EVIDENCE:
+- DNS Resolution from Agent: [your value]
+- Private Endpoint Real IP (Source of Truth): [your value]
+- Private DNS Zone A Record: [your value]
+
+ANALYSIS:
+The DNS A record in the privatelink.vaultcore.azure.net zone points to [wrong IP] 
+instead of the correct Private Endpoint IP [correct IP]. This causes the agent 
+to attempt connection to the wrong address, resulting in timeout.
+
+NEXT STEP:
+I will update the DNS A record to match the Private Endpoint IP and verify 
+the fix by re-running the pipeline.
+
+Thanks,
+[Your Name]
+```
+
+📧 **Send this email now before proceeding to the fix.**
+
+---
+
+### STEP 11: Fix the DNS A Record
+
+Now that you've identified the root cause and reported it, let's fix the misconfigured A record.
+
+**You have three options.** Choose the method you're most comfortable with:
+
+---
+
+#### Option A: Azure Portal (Visual Method)
+
+1. Go to **Azure Portal** → Search for "Private DNS zones"
+2. Click on `privatelink.vaultcore.azure.net`
+3. Go to **Recordsets** in the left menu
+4. Find the A record for your Key Vault (name will be like `kv-dns-lab-xxxxx`)
+5. Click on it → **Edit**
+6. Change the IP address to match the Private Endpoint IP (from STEP 8)
+7. Click **Save**
+
+---
+
+#### Option B: Azure CLI (Command Line Method)
 
 ```bash
-# 1. Get the correct IP from the Private Endpoint (The Truth)
+# Variables from previous steps
+RG_NAME=$(az group list --query "[?contains(name, 'rg-dns-lab')].name" -o tsv)
+KV_NAME=$(az keyvault list --resource-group $RG_NAME --query "[0].name" -o tsv)
+
+# Get the correct IP from the Private Endpoint (Source of Truth)
 CORRECT_IP=$(az network private-endpoint show \
-  --resource-group <RG_NAME> \
+  --resource-group $RG_NAME \
   --name pe-kv-dns-lab \
   --query "customDnsConfigs[0].ipAddresses[0]" -o tsv)
 
 echo "Correct IP is: $CORRECT_IP"
 
-# 2. Update the DNS Record to match the Truth
+# Update the DNS A record to match the correct IP
 az network private-dns record-set a update \
-  --resource-group <RG_NAME> \
+  --resource-group $RG_NAME \
   --zone-name privatelink.vaultcore.azure.net \
-  --name ${KV_NAME} \
-  --set aRecords[0].ipv4Address=${CORRECT_IP}
-```
+  --name $KV_NAME \
+  --set aRecords[0].ipv4Address=$CORRECT_IP
 
-### Option 2: The "Proper" Fix (Infrastructure as Code)
-*Use this to ensure your Terraform state matches reality.*
-
-```bash
-./fix-lab.sh lab1
+echo "DNS A record updated successfully"
 ```
-*Note: In this lab, `fix-lab.sh` just runs `terraform apply` to enforce the configuration defined in `main.tf`.*
 
 ---
 
-## ✅ Verify the Fix
+#### Option C: Azure REST API (Advanced Method)
 
-### 1. Check DNS Resolution (from the VM)
-
-SSH back into the agent VM (if you aren't there already) and test again:
 ```bash
-# Replace with your actual Key Vault name
-nslookup ${KV_NAME}.vault.azure.net
+# Get variables
+RG_NAME=$(az group list --query "[?contains(name, 'rg-dns-lab')].name" -o tsv)
+KV_NAME=$(az keyvault list --resource-group $RG_NAME --query "[0].name" -o tsv)
+SUB_ID=$(az account show --query id -o tsv)
+CORRECT_IP=$(az network private-endpoint show \
+  --resource-group $RG_NAME \
+  --name pe-kv-dns-lab \
+  --query "customDnsConfigs[0].ipAddresses[0]" -o tsv)
+
+# Get access token
+TOKEN=$(az account get-access-token --query accessToken -o tsv)
+
+# Update via REST API
+curl -X PATCH \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"properties\": {\"aRecords\": [{\"ipv4Address\": \"$CORRECT_IP\"}]}}" \
+  "https://management.azure.com/subscriptions/$SUB_ID/resourceGroups/$RG_NAME/providers/Microsoft.Network/privateDnsZones/privatelink.vaultcore.azure.net/A/$KV_NAME?api-version=2020-06-01"
+
+echo "DNS A record updated via REST API"
+```
+
+---
+
+**Choose one method above and execute it now.**
+
+---
+
+### STEP 12: Verify the Fix
+
+Now let's confirm the fix worked.
+
+---
+
+#### 1. Re-test DNS Resolution from Agent
+
+SSH back into the agent VM:
+
+```bash
+VM_IP=$(az vm list-ip-addresses --query "[?contains(virtualMachine.name, 'dns-lab-agent')].virtualMachine.network.publicIpAddresses[0].ipAddress" -o tsv)
+ssh azureuser@$VM_IP
+```
+
+Test DNS again:
+
+```bash
+KV_NAME="kv-dns-lab-c4cbb3dd"  # Use your actual Key Vault name
+nslookup $KV_NAME.vault.azure.net
 ```
 
 **Expected output:**
 ```
-Address: 10.1.2.4
+Address: 10.1.2.5
 ```
-✓ **Success!** The DNS now resolves to the correct Private Endpoint IP.
 
-### 2. Re-run the Pipeline
-1. Go back to Azure DevOps.
-2. Find your failed pipeline run.
-3. Click **"Rerun failed jobs"**.
+✅ **Success!** The DNS now resolves to the correct Private Endpoint IP.
 
-It should now succeed (green checkmarks everywhere)! 🎉
+Type `exit` to disconnect from the VM.
+
+---
+
+#### 2. Re-run the Pipeline
+
+1. Go to **Azure DevOps** → **Pipelines** → **DNS-Lab-Pipeline**
+2. Find your most recent failed run
+3. Click **"Rerun failed jobs"** or **"Run pipeline"**
+
+**Watch the stages:**
+- ✅ RetrieveConfig: Should complete successfully (~30 seconds)
+- ✅ Build: Creates Node.js app
+- ✅ Deploy: Shows `✓ Lab completed successfully!` with message
+
+🎉 **Pipeline should now succeed!**
 
 ---
 
