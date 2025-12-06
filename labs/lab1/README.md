@@ -121,30 +121,43 @@ Before diving into Azure resources, gather basic information about the failure. 
 
 Look at the pipeline log output. What does it tell you?
 
-```
-##[error]Failed to retrieve AppMessage from Key Vault
-This usually indicates a DNS resolution issue with the private endpoint.
+**Actual error you'll see in the RetrieveConfig stage:**
 
-Troubleshooting DNS:
-  1. Check DNS resolution: nslookup <keyvault>.vault.azure.net
-  2. Verify IP is in private endpoint range (10.1.2.0/24)
-  3. Check Private DNS zone VNet link exists
-  4. Verify A record in Private DNS zone
 ```
+Starting: Get Message from Key Vault
+==============================================================================
+Task         : Azure Key Vault
+Description  : Download Azure Key Vault secrets
+Version      : 2.8.0
+==============================================================================
+Downloading secret value for: AppMessage.
+##[error]The task has timed out.
+Finishing: Get Message from Key Vault
+```
+
+---
 
 **Decode the Error Signal:**
 
 | Symptom in Logs | Likely Cause | Investigation Path |
 |-----------------|--------------|--------------------|
-| **Variable is empty / Task Timeout** | **Connectivity Failure** <br> Agent cannot reach the Key Vault endpoint at all. | Check DNS, Firewall, NSG, Private Endpoint status. |
-| **"403 Forbidden" / "Access Denied"** | **Permission Failure** <br> Agent reached Key Vault, but was rejected. | Check Access Policies, Service Connection, RBAC. |
+| **Task times out (60 seconds)** | **Connectivity Failure** <br> Agent cannot reach the Key Vault endpoint. The task waits for 60 seconds trying to connect, then gives up. | Check DNS resolution, Firewall, NSG, Private Endpoint status. |
+| **"403 Forbidden" / "Access Denied"** | **Permission Failure** <br> Agent reached Key Vault quickly, but was rejected. | Check Access Policies, Service Connection, RBAC. |
 | **"Name not resolved"** | **DNS Failure** <br> Agent cannot find the IP address for the hostname. | Check DNS settings, Private DNS Zones. |
 | **"Connection Refused"** | **Service Down / Blocked** <br> Reached IP, but port 443 is closed or blocked. | Check NSG, Firewall rules. |
 
+---
+
 **For this scenario:**
-- The `$(AppMessage)` variable is empty or the task times out.
-- The RetrieveConfig stage fails, blocking subsequent Build and Deploy stages.
-- **Conclusion:** This is a **Connectivity Issue**. The agent can't find or reach the Key Vault.
+- The task shows "Downloading secret value for: AppMessage." (it knows what to get)
+- Then it **times out after 60 seconds** (it can't reach the endpoint)
+- The RetrieveConfig stage fails, blocking subsequent Build and Deploy stages
+- **Conclusion:** This is a **Connectivity Issue**—the agent can't reach the Key Vault
+
+**What the timeout tells us:**
+- ✅ Authentication is working (the task got past service connection validation)
+- ✅ Permissions are likely OK (no immediate "403 Forbidden")
+- ❌ Network connectivity is broken (agent waited 60 seconds and couldn't connect)
 
 **Action Plan:** Focus on **Network & DNS**, not permissions.
 
