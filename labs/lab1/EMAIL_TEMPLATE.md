@@ -64,7 +64,6 @@ Use this template to draft your collaboration request to Azure Networking Suppor
 | **Resource Group** | `_____________________` |
 | **Key Vault Name** | `_____________________` |
 | **Key Vault FQDN** | `_____________________` |
-| **Key Vault Resource URI** | `_____________________` |
 | **Private Endpoint Name** | `_____________________` |
 | **Private Endpoint IP** | `_____________________` |
 | **Private DNS Zone Name** | `_____________________` |
@@ -72,6 +71,48 @@ Use this template to draft your collaboration request to Azure Networking Suppor
 | **Agent VNet CIDR** | `_____________________` |
 | **Agent VM Name** | `_____________________` |
 | **Agent VM Private IP** | `_____________________` |
+
+---
+
+## Azure Resource IDs (for Backend Logging)
+
+**Why Azure Support needs these:** Resource IDs allow support engineers to query Azure Resource Graph, backend diagnostic logs, and resource health telemetry not visible in the Portal. This accelerates root cause analysis.
+
+### How to Retrieve Resource IDs
+
+**Portal Method:**
+1. Navigate to the resource in Azure Portal
+2. Go to **Properties** blade
+3. Copy the **Resource ID** field (looks like `/subscriptions/{guid}/resourceGroups/{rg}/providers/...`)
+
+**CLI Method:**
+```bash
+# Key Vault Resource ID
+az keyvault show --name <keyvault-name> --query id -o tsv
+
+# Private Endpoint Resource ID
+az network private-endpoint show --name <pe-name> --resource-group <rg> --query id -o tsv
+
+# Private DNS Zone Resource ID
+az network private-dns zone show --name privatelink.vaultcore.azure.net --resource-group <rg> --query id -o tsv
+
+# VNet Resource ID
+az network vnet show --name <vnet-name> --resource-group <rg> --query id -o tsv
+
+# Network Interface Resource ID (attached to Private Endpoint)
+az network nic show --ids $(az network private-endpoint show --name <pe-name> --resource-group <rg> --query 'networkInterfaces[0].id' -o tsv) --query id -o tsv
+```
+
+### Fill in Resource IDs
+
+| Resource | Resource ID |
+|----------|-------------|
+| **Key Vault** | `/subscriptions/_____/resourceGroups/_____/providers/Microsoft.KeyVault/vaults/_____` |
+| **Private Endpoint** | `/subscriptions/_____/resourceGroups/_____/providers/Microsoft.Network/privateEndpoints/_____` |
+| **Network Interface (PE)** | `/subscriptions/_____/resourceGroups/_____/providers/Microsoft.Network/networkInterfaces/_____` |
+| **Private DNS Zone** | `/subscriptions/_____/resourceGroups/_____/providers/Microsoft.Network/privateDnsZones/privatelink.vaultcore.azure.net` |
+| **Agent VNet** | `/subscriptions/_____/resourceGroups/_____/providers/Microsoft.Network/virtualNetworks/_____` |
+| **Agent VM** | `/subscriptions/_____/resourceGroups/_____/providers/Microsoft.Compute/virtualMachines/_____` |
 
 ---
 

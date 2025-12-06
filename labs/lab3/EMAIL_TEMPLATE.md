@@ -58,6 +58,58 @@ instead of the private endpoint IP for Azure services, causing connectivity fail
 
 ---
 
+### Azure Resource IDs (for Backend Telemetry)
+
+**Why needed**: Resource IDs enable Azure Support to:
+- Query Azure Resource Graph for configuration change history
+- Access backend diagnostic logs for Private Endpoint connections
+- Correlate cross-service telemetry (Agent VM → Custom DNS → Azure DNS → Key Vault)
+- Identify region-specific infrastructure issues not visible in Portal
+
+**Important for Custom DNS**: Since Azure Support cannot directly access customer-managed DNS servers, Resource IDs help correlate Azure-side infrastructure (VNet, Private DNS Zone, Private Endpoint) with the custom DNS forwarding chain.
+
+#### How to Retrieve Resource IDs
+
+**Portal Method:**
+1. Navigate to resource in Azure Portal
+2. Go to **Properties** blade
+3. Copy **Resource ID** (full ARM path: `/subscriptions/.../providers/...`)
+
+**CLI Method:**
+```bash
+# Key Vault
+az keyvault show --name <keyvault-name> --query id -o tsv
+
+# Private Endpoint
+az network private-endpoint show --name <pe-name> --resource-group <rg> --query id -o tsv
+
+# Private DNS Zone
+az network private-dns zone show --name privatelink.vaultcore.azure.net --resource-group <rg> --query id -o tsv
+
+# Agent VNet
+az network vnet show --name <vnet-name> --resource-group <rg> --query id -o tsv
+
+# Custom DNS Server VM
+az vm show --name <vm-name> --resource-group <rg> --query id -o tsv
+
+# Network Interface (attached to Private Endpoint)
+az network nic show --ids $(az network private-endpoint show --name <pe-name> --resource-group <rg> --query 'networkInterfaces[0].id' -o tsv) --query id -o tsv
+```
+
+#### Fill in Resource IDs Below
+
+| Resource | Resource ID (Full ARM Path) |
+|----------|-----------------------------|
+| **Key Vault** | `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.KeyVault/vaults/{name}` |
+| **Private Endpoint** | `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.Network/privateEndpoints/{name}` |
+| **Network Interface (PE)** | `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.Network/networkInterfaces/{name}` |
+| **Private DNS Zone** | `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.Network/privateDnsZones/privatelink.vaultcore.azure.net` |
+| **Agent VNet** | `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.Network/virtualNetworks/{name}` |
+| **Agent VM** | `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.Compute/virtualMachines/{name}` |
+| **Custom DNS Server VM** | `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.Compute/virtualMachines/{name}` |
+
+---
+
 ### Timeline
 
 - **Last successful run**: [Date/Time or "Lab 2 completion"]

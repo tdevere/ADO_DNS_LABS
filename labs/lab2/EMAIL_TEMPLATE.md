@@ -55,6 +55,46 @@ instead of the private endpoint IP, causing connectivity failures.]
 
 ---
 
+### Azure Resource IDs (for Backend Telemetry)
+
+**Why needed**: Resource IDs allow Azure Support to query backend diagnostic logs, Resource Graph history, and cross-service correlation telemetry (e.g., Private Endpoint → Key Vault calls). This data is not visible in the Portal.
+
+#### How to Retrieve Resource IDs
+
+**Portal Method:**
+1. Navigate to resource → **Properties** blade → Copy **Resource ID**
+
+**CLI Method:**
+```bash
+# Key Vault
+az keyvault show --name <keyvault-name> --query id -o tsv
+
+# Private Endpoint
+az network private-endpoint show --name <pe-name> --resource-group <rg> --query id -o tsv
+
+# Private DNS Zone
+az network private-dns zone show --name privatelink.vaultcore.azure.net --resource-group <rg> --query id -o tsv
+
+# VNet
+az network vnet show --name <vnet-name> --resource-group <rg> --query id -o tsv
+
+# Network Interface (attached to Private Endpoint)
+az network nic show --ids $(az network private-endpoint show --name <pe-name> --resource-group <rg> --query 'networkInterfaces[0].id' -o tsv) --query id -o tsv
+```
+
+#### Fill in Resource IDs Below
+
+| Resource | Resource ID (Full ARM Path) |
+|----------|-----------------------------|
+| **Key Vault** | `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.KeyVault/vaults/{name}` |
+| **Private Endpoint** | `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.Network/privateEndpoints/{name}` |
+| **Network Interface (PE)** | `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.Network/networkInterfaces/{name}` |
+| **Private DNS Zone** | `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.Network/privateDnsZones/privatelink.vaultcore.azure.net` |
+| **Agent VNet** | `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.Network/virtualNetworks/{name}` |
+| **Agent VM** | `/subscriptions/{sub-id}/resourceGroups/{rg}/providers/Microsoft.Compute/virtualMachines/{name}` |
+
+---
+
 ### Timeline
 
 - **Last successful run**: [Date/Time or "Never worked" or "Lab 1 completion"]
