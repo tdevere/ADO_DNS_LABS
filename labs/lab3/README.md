@@ -1,172 +1,254 @@
 # Lab 3: Custom DNS Server Misconfiguration
 
+## 📋 Objectives
+
+**What Breaks**: The VNet DNS settings change from Azure-provided DNS to a custom DNS server (10.1.2.50) that lacks proper forwarding rules for Azure Private Link zones.
+
+**What You'll Learn**:
+- How custom DNS servers interact with Azure Private DNS Zones
+- Why 168.63.129.16 (Azure Recursive Resolver) is critical for Private Link
+- How to diagnose DNS forwarding chain issues
+- When to use conditional forwarding vs global forwarding
+- Collaboration with DNS administrator teams
+
+**What You'll Fix**: Configure conditional forwarding rule on custom DNS server to forward `*.privatelink.*` queries to Azure DNS (168.63.129.16).
+
+---
+
 ## 📧 Background Story
 
-> **Read the full scenario:** [SCENARIO.md](SCENARIO.md)
+You are Jordan Chen, DevOps Engineer at Contoso HealthTech Solutions. After successfully resolving two previous DNS incidents over the past six weeks (Lab 1: wrong A record, Lab 2: missing VNet link), you've become the team's DNS expert. 
 
-You are Jordan Chen, DevOps Engineer at Contoso HealthTech Solutions. After successfully resolving two previous DNS incidents over the past six weeks (Lab 1: wrong A record, Lab 2: missing VNet link), you've become the team's DNS expert. Now the build agent has gone completely offline and cannot resolve any Azure service domains.
+The pipeline is failing again with Key Vault access errors. Your manager wants you to carefully diagnose the custom DNS setup that the networking team recently deployed.
 
-Your investigation reveals the VNet is configured to use a custom DNS server (10.1.2.50) that isn't working correctly. Your manager wants you to carefully diagnose the custom DNS setup and determine the appropriate resolution approach.
-
----
-
-## 🎯 Your Mission
-
-Investigate why the build agent cannot resolve any Azure service FQDNs (dev.azure.com, *.vault.azure.net). The VNet is configured to use a custom DNS server instead of Azure's default resolver. Determine whether to remove the custom DNS configuration or fix the custom DNS server's forwarding rules.
-
-> **Real-World Context**
-> Self-hosted agents rely on DNS to reach `dev.azure.com`. When organizations switch to custom DNS servers (BIND, Windows DNS, Infoblox) without configuring proper forwarding for Azure endpoints, agents lose connectivity instantly. This manifests as a "silent outage"—no error logs in the portal, just offline agents.
+> **Real-World Context**: Organizations often deploy custom DNS servers (BIND, Windows DNS, Infoblox) for centralized DNS management without configuring proper forwarding for Azure Private Link zones. This manifests as "public network access" errors even though private endpoints exist and VNet links are configured correctly.
 
 ---
 
-## 📋 Prerequisites
+## Prerequisites
 
-### Initial Setup (First Time Only)
+- Completed Lab 1 (DNS A Record Misconfiguration)
+- Completed Lab 2 (Missing Virtual Network Link)  
+- Understanding of DNS forwarding concepts
+- Custom DNS server (BIND9) deployed in lab environment
 
-If you haven't set up the lab environment yet, complete these steps:
-
-**1. Add custom DNS server image ID to `terraform.tfvars`:**
-```hcl
-custom_dns_image_id = "/subscriptions/fcfa67ae-efeb-417c-a966-48b4937d2918/resourceGroups/rg-dns-lab-images-20251129022831/providers/Microsoft.Compute/images/dns-server-lab3-bind9"
-```
-
-**2. Deploy base infrastructure:**
-```bash
-# Source ADO credentials
-source .ado.env
-
-# Deploy base infrastructure
-terraform init
-terraform apply -var="lab_scenario=base" \
-  -var="ado_org_url=$ADO_ORG_URL" \
-  -var="ado_pat=$ADO_PAT"
-```
-
-**3. Register the self-hosted agent:**
-```bash
-# This script registers the agent and ensures it's online
-./scripts/register-agent.sh
-```
-
-**4. Set up the Azure DevOps pipeline:**
-```bash
-./scripts/setup-pipeline.sh
-```
-
-**5. Verify the pipeline works:**
-- Go to Azure DevOps → Pipelines
-- Run the "DNS-Lab-Pipeline"
-- All three stages should succeed: RetrieveConfig, Build, Deploy
-- The Deploy stage should display the success message from AppMessage
-
-### Before Starting This Lab
-
-1. ✅ Base infrastructure deployed and working
-2. ✅ Agent registered and online in Azure DevOps
-3. ✅ Pipeline successfully runs in base state
-
-**Quick verification:**
-```bash
-# Check deployed resources
-terraform output
-
-# Verify agent is online (check Azure DevOps agent pool)
-# Verify pipeline ran successfully (check last run in Azure DevOps)
-```
-
-> **Note:** This lab uses a pre-built custom DNS server image with BIND9 pre-configured.
-
-> **⚠️ Troubleshooting: "Public network access is disabled" error during terraform apply**
-> 
-> If you see this error when running `terraform apply -var="lab_scenario=base"`:
-> ```
-> Error: making Read request on Azure KeyVault Secret AppMessage: 
-> keyvault.BaseClient#GetSecret: Failure responding to request: StatusCode=403
-> Code="Forbidden" Message="Public network access is disabled..."
-> ```
-> 
-> **Cause:** The Key Vault has public network access disabled from a previous lab run, but Terraform needs to access it from your Codespace.
-> 
-> **Fix:**
-> ```bash
-> # Get Key Vault name
-> KV_NAME=$(terraform output -raw key_vault_name)
-> 
-> # Re-enable public network access
-> az keyvault update --name $KV_NAME --public-network-access Enabled
-> 
-> # Retry terraform apply
-> source .ado.env
-> terraform apply -var="lab_scenario=base" \
->   -var="ado_org_url=$ADO_ORG_URL" \
->   -var="ado_pat=$ADO_PAT" \
->   -auto-approve
-> ```
+> **Note:** This lab uses a pre-built custom DNS server image with BIND9. The break script reconfigures the VNet to use this custom DNS server instead of Azure-provided DNS.
 
 ---
 
-## 🏗️ Lab Architecture
+## STEP 1: Review the Objectives
 
-This lab introduces a **custom DNS server** in your VNet:
+Before breaking anything, understand what you're about to investigate:
 
-```mermaid
-flowchart TB
-    subgraph VNet["Agent VNet 10.1.0.0/16"]
-        VM["Agent VM\n10.1.1.x"]
-        DNS["Custom DNS Server\n10.1.2.50"]
-    end
-    
-    subgraph Azure["Azure Resources"]
-        KV["Key Vault\nwith Private Endpoint"]
-        PE["Private Endpoint\n10.1.2.5"]
-        PrivateZone["Private DNS Zone\nprivatelink.vaultcore.azure.net"]
-    end
-    
-    subgraph External["External DNS"]
-        AzureDNS["Azure DNS\n168.63.129.16"]
-        Internet["Public Internet DNS"]
-    end
-    
-    VM -->|Uses for DNS| DNS
-    DNS -.->|Forwards queries| External
-    KV --> PE
-    PrivateZone -.-> PE
-    
-    style DNS fill:#e8f4f8
-    style PE fill:#d4edda
-    style PrivateZone fill:#d4edda
-```
+**The Break**: We'll reconfigure **Agent VNet → DNS Settings** to use a custom DNS server (10.1.2.50) instead of **Azure Recursive Resolver (168.63.129.16)**. The custom DNS server is misconfigured—it forwards all queries to public DNS (8.8.8.8) without conditional forwarding rules for Azure Private Link zones.
 
-**What's different in this lab:**
-Unlike Labs 1-2 where the VNet used Azure's built-in DNS, this environment has a custom DNS server. The networking team recently deployed it for "centralized DNS management."
+**Expected Symptom**: **Agent VM → DNS Resolver** will query **Custom DNS Server (10.1.2.50)**, which forwards to **Google DNS (8.8.8.8)**, which returns public IP addresses. **Pipeline → AzureKeyVault@2 Task** fails because it attempts connection to public IP while **Key Vault → Network Firewall** blocks public access.
 
-**What you don't know (yet):**
-- How is the custom DNS server configured?
-- Where does it forward queries?
-- Why does internet DNS work but Key Vault access fails?
+**Learning Goal**: Understand that custom DNS servers in Azure VNets **must** have conditional forwarding rules to send `*.privatelink.*` queries to **Azure Recursive Resolver (168.63.129.16)**. Without these rules, Private Link DNS resolution is impossible.
+
+### The Critical IP: 168.63.129.16
+
+**What is it?**
+- **Azure Wire Server / Recursive Resolver**
+- **ONLY** accessible from inside Azure VNets (not from internet or on-premises)
+- **ONLY** source for Azure Private DNS Zone queries
+- Required for ALL Private Link DNS resolution
+
+**Why it matters:**
+- Public DNS servers (Google 8.8.8.8, Cloudflare 1.1.1.1) have NO knowledge of Azure Private DNS Zones
+- Custom DNS servers in Azure can reach 168.63.129.16 to query Private DNS Zones
+- Without forwarding to 168.63.129.16, Private Link zones cannot be resolved
 
 ---
 
----
+## STEP 2: Break the Lab and Observe the Failure
 
-## 💥 Start the Lab
-
-### Step 1: Simulate the Infrastructure Change
-
-Run this command to simulate the custom DNS configuration:
+Run the break script:
 ```bash
 ./break-lab.sh lab3
 ```
 
-This represents a custom DNS server deployment made outside your pipeline's control. The script configures the VNet to use a custom DNS server instead of Azure's default resolver.
+**What this does** (silently, like real-world changes):
+- Reconfigures **Agent VNet → DNS Settings** to use custom DNS server (10.1.2.50)
+- Custom DNS server has global forwarders pointing to Google DNS (8.8.8.8)
+- Custom DNS server has NO conditional forwarding rules for `*.privatelink.*` zones
+- Disables public network access on Key Vault (forces private endpoint use)
 
-### Step 2: Observe the Agent Offline
+Now trigger your pipeline in Azure DevOps (push a commit or click "Run pipeline").
 
-1. Go to **Azure DevOps** → **Project Settings** → **Agent Pools** → **DNS-Lab-Pool**
-2. Observe that your agent is **Offline**
-3. Try to queue a pipeline run - it will sit in "Queued" state indefinitely
+**Expected Error Output**:
+```
+Starting: Retrieve Configuration from Key Vault
+==============================================================================
+Task         : Azure Key Vault
+Description  : Download Azure Key Vault secrets
+Version      : 2.x.x
+==============================================================================
+Key vault name: keyvault-dnslab12345
+Downloading secret value for: AppMessage
+##[error]AppMessage: "Public network access is disabled and request is not from a trusted service nor via an approved private link.
+Caller: appid=***;oid=...;
+Vault: keyvault-dnslab12345;location=westus2"
 
-**Key Observation:** This isn't a pipeline error—it's an infrastructure outage. The agent cannot communicate with Azure DevOps at all.
+##[error]Failed to fetch the value of secret AppMessage. Error: Public network access is disabled
+Finishing: Retrieve Configuration from Key Vault
+```
+
+📸 **Take a screenshot** of this error - you'll need it for your collaboration request.
+
+**Alternative Symptom** (if agent goes offline):
+If DNS is completely broken, the agent may go offline and cannot even poll Azure DevOps. Check:
+1. Azure DevOps → Project Settings → Agent Pools → DNS-Lab-Pool
+2. Agent status shows **Offline**
+3. Pipeline sits in "Queued" state indefinitely
+
+---
+
+## STEP 3: Understand the Architecture
+
+Before diving into troubleshooting, understand the new component introduced in Lab 3:
+
+### Discover Your Resources
+
+**Azure Portal Navigation**:
+1. Go to **Resource groups** → find `rg-dnslab`
+2. Look for these resources:
+   - **Key Vault** (keyvault-dnslab...)
+   - **Private Endpoint** (pe-keyvault-...)
+   - **Private DNS Zone** (privatelink.vaultcore.azure.net)
+   - **Virtual Network** (vnet-agent)
+   - **Virtual Machine** (vm-agent-dnslab - the agent)
+   - **Virtual Machine** (vm-dns-server - **NEW in Lab 3**)
+
+### Component Hierarchy with Custom DNS
+
+```
+Pipeline → RetrieveConfig Stage → AzureKeyVault@2 Task
+    ↓ (runs on)
+Agent VM → Network Stack → DNS Resolver
+    ↓ (queries - CHANGED IN LAB 3)
+Custom DNS Server (10.1.2.50) [BIND9]
+    ↓ (forwards to - MISCONFIGURED)
+Google DNS (8.8.8.8) [Public DNS, no Private Link knowledge]
+    ↓ (returns)
+Public IP Address (52.x.x.x) ← WRONG!
+
+Expected path:
+Custom DNS Server (10.1.2.50)
+    ↓ (should forward *.privatelink.* to)
+Azure Recursive Resolver (168.63.129.16)
+    ↓ (queries)
+Agent VNet → VNet Link → Private DNS Zone → A Record
+    ↓ (returns)
+Private IP Address (10.1.2.5) ← CORRECT!
+```
+
+### Key Difference from Labs 1-2
+
+| Aspect | Labs 1-2 | Lab 3 |
+|--------|----------|-------|
+| **VNet DNS Settings** | Azure-provided (168.63.129.16) | Custom DNS server (10.1.2.50) |
+| **DNS Query Path** | Direct to Azure Recursive Resolver | Through custom DNS server first |
+| **Problem Location** | Private DNS Zone config | Custom DNS server forwarding rules |
+| **Fix Involves** | Portal/CLI to fix Azure resources | DNS administrator to configure BIND9 |
+
+### Update Your Email Draft
+
+Open `EMAIL_TEMPLATE.md` in this lab folder and update:
+- **Affected Resource Details** table (add Custom DNS Server row)
+- **Error Messages** section (paste the error from STEP 2)
+- **Timeline** section (note when custom DNS was deployed)
+
+---
+
+## STEP 4: Understand the Error
+
+Let's interpret what the error message tells us:
+
+| What the Error Says | Hierarchical Component | What This Means |
+|---------------------|------------------------|-----------------|
+| "Public network access is disabled" | **Key Vault → Network Settings** blocks public IPs | Key Vault requires private endpoint access only |
+| "Request is not from a trusted service" | **Pipeline → Service Principal** identity is not in exception list | Authentication succeeded, but network path is wrong |
+| "Nor via an approved private link" | **Agent VM → Network Path** didn't use Private Endpoint | Connection attempt came from public IP range, not private |
+
+**Root Cause Hypothesis**: **Agent VM → DNS Resolver** is returning a public IP address instead of the **Private Endpoint → Private IP**, causing **Pipeline → AzureKeyVault@2 Task** to attempt connection over public internet (which Key Vault rejects).
+
+**But wait...** Labs 1 and 2 had similar symptoms. What's different this time?
+
+**Three Possible Root Causes**:
+1. **Lab 1 scenario**: DNS A record points to wrong IP ← Check with `az network private-dns record-set a show`
+2. **Lab 2 scenario**: VNet link missing ← Check with `az network private-dns link vnet list`
+3. **Lab 3 scenario (NEW)**: Custom DNS server misconfigured ← Check **Agent VNet → DNS Settings** and **Custom DNS Server → Forwarding Rules**
+
+---
+
+## STEP 5: Complete Azure Guided Troubleshooter 🧭
+
+Before collecting detailed data, complete the Azure Guided Troubleshooter workflow.
+
+### Answer These 3 Questions
+
+<details>
+<summary><strong>Question 1: Does your issue involve resources in a Virtual Network (VNet)?</strong></summary>
+
+**Your Answer**: ☑️ **Yes**
+
+**Why**: 
+- **Agent VM** runs in Agent VNet (10.1.0.0/16)
+- **Custom DNS Server VM** runs in Agent VNet (10.1.2.50)
+- **Private Endpoint** connects to Key Vault from VNet (10.1.2.5)
+- **Private DNS Zone** requires VNet links to function
+
+**Hint**: Custom DNS in VNets adds complexity to troubleshooting.
+
+</details>
+
+<details>
+<summary><strong>Question 2: Are you experiencing an issue with DNS, Network connectivity, or Application-specific behavior?</strong></summary>
+
+**Your Answer**: 🔹 **DNS issue**
+
+**Why**: 
+- The error says "not via approved private link"
+- This suggests wrong IP address is being used
+- DNS resolution determines which IP **Agent VM → DNS Resolver** returns
+- If DNS returns public IP, connection fails at Key Vault firewall
+
+**Hint**: Even though a custom DNS server is involved, the symptom is still DNS resolution returning wrong IP.
+
+</details>
+
+<details>
+<summary><strong>Question 3: What DNS solution(s) does your architecture use?</strong></summary>
+
+**Your Answer**: 🔹 **Custom DNS servers** (BIND9 at 10.1.2.50)
+
+**Why**: 
+- **Agent VNet → DNS Settings** points to 10.1.2.50 (not Azure-provided 168.63.129.16)
+- **Custom DNS Server** is BIND9 running on a VM
+- **Private DNS Zone** still exists and is linked to VNet
+- Problem is **Custom DNS Server → Forwarding Rules**, not Private DNS Zone configuration
+
+**Critical Note**: This answer differs from Labs 1-2! Custom DNS means Microsoft Azure Support may need to coordinate with your DNS administrator team, as they cannot directly access or modify customer-managed DNS infrastructure.
+
+</details>
+
+### Troubleshooter Result
+
+**Routing**: SAP Azure / Azure DNS / Custom DNS Configuration
+
+**Next Steps**: You've identified this involves custom DNS. Now collect diagnostic evidence showing how the custom DNS server is misconfigured.
+
+**⚠️ Important**: In production, custom DNS issues require collaboration with DNS administrator team. Azure Support can provide guidance on proper forwarding configuration but cannot modify customer DNS servers.
+
+### Update Your Email Template
+
+Open `EMAIL_TEMPLATE.md` and complete:
+- **Azure Guided Troubleshooter Responses** section (mark answer #3 as "Custom DNS servers")
+- **Timeline** section (when was custom DNS deployed?)
+- **Additional Context** section (DNS administrator contact if production)
+
+💾 **Save your progress** - you'll send this to your instructor at STEP 10.
 
 ---
 
