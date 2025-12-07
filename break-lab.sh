@@ -192,13 +192,22 @@ case $LAB_ID in
         fi
         
         # Update Key Vault secret with error message
-        silent az keyvault secret set --vault-name "$KV_NAME" --name "AppMessage" \
-            --value "ERROR: Connection timeout! DNS cache may be stale after endpoint recreation."
+        if [[ "$DEBUG" == "true" ]]; then
+            az keyvault secret set --vault-name "$KV_NAME" --name "AppMessage" \
+                --value "ERROR: Connection timeout! DNS cache may be stale after endpoint recreation."
+        else
+            az keyvault secret set --vault-name "$KV_NAME" --name "AppMessage" \
+                --value "ERROR: Connection timeout! DNS cache may be stale after endpoint recreation." > /dev/null 2>&1
+        fi
         
         # Restart the agent to ensure it uses the cached DNS
         echo "  → Restarting agent to apply cached DNS..."
         if [ -n "$VM_NAME" ]; then
-            silent az vm restart --resource-group "$RG_NAME" --name "$VM_NAME"
+            if [[ "$DEBUG" == "true" ]]; then
+                az vm restart --resource-group "$RG_NAME" --name "$VM_NAME"
+            else
+                az vm restart --resource-group "$RG_NAME" --name "$VM_NAME" > /dev/null 2>&1
+            fi
             echo "  ✓ Agent VM restarted"
         fi
         
@@ -220,10 +229,19 @@ case $LAB_ID in
         ;;
     lab3)
         echo "Injecting Lab 3 fault..."
-        silent az network vnet update --resource-group "$RG_NAME" --name "$VNET_NAME" --dns-servers 10.1.2.50
+        if [[ "$DEBUG" == "true" ]]; then
+            az network vnet update --resource-group "$RG_NAME" --name "$VNET_NAME" --dns-servers 10.1.2.50
+        else
+            az network vnet update --resource-group "$RG_NAME" --name "$VNET_NAME" --dns-servers 10.1.2.50 > /dev/null 2>&1
+        fi
         # Update Key Vault secret with error message
-        silent az keyvault secret set --vault-name "$KV_NAME" --name "AppMessage" \
-            --value "ERROR: Custom DNS server misconfigured! Check VNet DNS settings."
+        if [[ "$DEBUG" == "true" ]]; then
+            az keyvault secret set --vault-name "$KV_NAME" --name "AppMessage" \
+                --value "ERROR: Custom DNS server misconfigured! Check VNet DNS settings."
+        else
+            az keyvault secret set --vault-name "$KV_NAME" --name "AppMessage" \
+                --value "ERROR: Custom DNS server misconfigured! Check VNet DNS settings." > /dev/null 2>&1
+        fi
         
         echo "✅ Lab 3 fault injected."
         echo ""

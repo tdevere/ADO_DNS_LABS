@@ -125,7 +125,23 @@ check_azure_login() {
 
 setup_ado() {
     echo -e "\n${BLUE}3️⃣  Configuring Azure DevOps...${NC}"
-    if [ -f ".ado.env" ]; then
+    
+    # Check if variables are provided via environment (from pipeline)
+    if [ -n "${ADO_ORG_URL:-}" ] && [ -n "${ADO_PAT:-}" ] && [ -n "${ADO_PROJECT:-}" ] && [ -n "${ADO_POOL:-}" ]; then
+        echo -e "${GREEN}✅ Using environment variables from pipeline${NC}"
+        export AZURE_DEVOPS_EXT_PAT="$ADO_PAT"
+        
+        # Save to .ado.env for consistency
+        cat > .ado.env << EOF
+ADO_ORG_URL="$ADO_ORG_URL"
+ADO_PAT="$ADO_PAT"
+ADO_PROJECT="$ADO_PROJECT"
+ADO_POOL="$ADO_POOL"
+AZURE_TENANT="${AZURE_TENANT:-}"
+EOF
+        
+        echo -e "${GREEN}✓ ADO configuration saved to .ado.env${NC}"
+    elif [ -f ".ado.env" ]; then
         echo -e "${GREEN}✅ Found existing configuration (.ado.env)${NC}"
         source .ado.env
         

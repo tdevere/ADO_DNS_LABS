@@ -12,6 +12,9 @@ parameters:
     type: string
     default: ''
 
+variables:
+  - group: LabConfiguration
+
 stages:
   - stage: LabStage
     displayName: DNS Lab - ${{ parameters.action }}
@@ -52,6 +55,13 @@ stages:
                 export STUDENT_ALIAS="${{ parameters.studentAlias }}"
                 export LAB_NUMBER="${{ parameters.labNumber }}"
                 
+                # Export variables from variable group to environment
+                export ADO_ORG_URL="$(ADO_ORG_URL)"
+                export ADO_PAT="$(ADO_PAT)"
+                export ADO_PROJECT="$(ADO_PROJECT)"
+                export ADO_POOL="$(ADO_POOL)"
+                export AZURE_TENANT="$(AZURE_TENANT)"
+                
                 # Logic to derive alias from branch name if needed (commented out as requested)
                 # if [ -z "$STUDENT_ALIAS" ]; then
                 #   STUDENT_ALIAS=$(echo $(Build.SourceBranchName) | cut -d'/' -f2)
@@ -66,7 +76,7 @@ stages:
                     ;;
                   break)
                     chmod +x ./break-lab.sh
-                    ./break-lab.sh
+                    ./break-lab.sh "$LAB_NUMBER"
                     ;;
                   destroy)
                     chmod +x ./destroy.sh
