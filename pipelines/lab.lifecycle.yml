@@ -65,19 +65,21 @@ stages:
               inlineScript: |
                 export STUDENT_ALIAS="${{ parameters.studentAlias }}"
                 export LAB_NUMBER="${{ parameters.labNumber }}"
-                
-                # Export variables from variable group to environment
                 export ADO_ORG_URL="$(ADO_ORG_URL)"
                 export ADO_PAT="$(ADO_PAT)"
                 export ADO_PROJECT="$(ADO_PROJECT)"
                 export ADO_POOL="$(ADO_POOL)"
                 export AZURE_TENANT="$(AZURE_TENANT)"
                 
-                # Logic to derive alias from branch name if needed (commented out as requested)
-                # if [ -z "$STUDENT_ALIAS" ]; then
-                #   STUDENT_ALIAS=$(echo $(Build.SourceBranchName) | cut -d'/' -f2)
-                # fi
-
+                echo "=== DEBUG: Script Environment ==="
+                echo "ADO_ORG_URL=${ADO_ORG_URL}"
+                echo "ADO_PROJECT=${ADO_PROJECT}"
+                echo "ADO_POOL=${ADO_POOL}"
+                echo "AZURE_TENANT=${AZURE_TENANT}"
+                echo "STUDENT_ALIAS=${STUDENT_ALIAS}"
+                echo "LAB_NUMBER=${LAB_NUMBER}"
+                echo "=================================="
+                echo ""
                 echo "Running action: ${{ parameters.action }} for user: $STUDENT_ALIAS"
 
                 case "${{ parameters.action }}" in
