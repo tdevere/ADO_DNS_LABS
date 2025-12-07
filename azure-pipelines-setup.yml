@@ -11,7 +11,7 @@ stages:
       - job: SetupLab
         displayName: 'Setup Lab Environment'
         pool:
-          name: 'ADO-Pipeline-Network-Troubleshooting-Labs-Pool'
+          name: 'DNS-Lab-Pool'
         steps:
           - checkout: self
 
@@ -81,7 +81,7 @@ stages:
                 echo "ADO_ORG_URL: $ADO_ORG_URL"
                 echo "ADO_PROJECT: $ADO_PROJECT"
                 echo "ADO_POOL: $ADO_POOL"
-                echo "Using existing VMSS-backed pool; no manual agent registration is needed."
+                echo "Pool configured: $ADO_POOL (self-hosted). Agent registration required."
                 
                 if [ -z "$ADO_ORG_URL" ] || [ -z "$ADO_PAT" ] || [ -z "$ADO_PROJECT" ] || [ -z "$ADO_POOL" ]; then
                   echo "❌ ERROR: Missing required ADO variables in variable group"
@@ -171,6 +171,7 @@ EOF
                 echo ""
                 echo "=== 🎉 Lab Setup Complete! ==="
                 echo "All infrastructure and pipelines are ready."
-                echo "Agents are provided by the VMSS pool: ADO-Pipeline-Network-Troubleshooting-Labs-Pool"
+                echo "Agents run in self-hosted pool: DNS-Lab-Pool"
+                echo "If no agent is present, run ./scripts/register-agent.sh after infrastructure deploy"
                 echo "Next: See labs/lab1/README.md to start Lab 1"
                 echo "Cleanup: Run ./destroy.sh when finished"
