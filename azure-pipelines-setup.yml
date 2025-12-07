@@ -40,15 +40,123 @@ stages:
 
           - task: DownloadSecureFile@1
             name: sshKey
-            displayName: 'Download SSH Key'
+            displayName: 'Download SSH Key from Secure Files'
             inputs:
               secureFile: 'terraform_lab_key'
             continueOnError: true
 
+          - script: |
+              echo "=== Checking Prerequisites ==="
+              for tool in az terraform jq ssh; do
+                if ! command -v "$tool" > /dev/null 2>&1; then
+                  echo "❌ Missing tool: $tool"
+                  exit 1
+                else
+                  echo "✅ Found: $tool"
+                fi
+              done
+            displayName: '1. Check Prerequisites'
+            workingDirectory: '$(Build.SourcesDirectory)'
+
           - task: AzureCLI@2
-            displayName: 'Setup Lab Environment'
-            env:
-              SSH_PASSWORD: $(SSH_PASSWORD)
+            displayName: '2. Verify Azure Login'
+            inputs:
+              azureSubscription: 'LabConnection'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                SUB_NAME=$(az account show --query name -o tsv)
+                SUB_ID=$(az account show --query id -o tsv)
+                echo "✅ Logged in to: $SUB_NAME ($SUB_ID)"
+
+          - script: |
+              echo "=== Configuring Azure DevOps ==="
+              echo "ADO_ORG_URL: $(ADO_ORG_URL)"
+              echo "ADO_PROJECT: $(ADO_PROJECT)"
+              echo "ADO_POOL: DNS-Lab-Pool"
+              
+              if [ -z "$(ADO_ORG_URL)" ] || [ -z "$(ADO_PAT)" ] || [ -z "$(ADO_PROJECT)" ]; then
+                echo "❌ ERROR: Missing required ADO variables in variable group"
+                exit 1
+              fi
+              
+              # Save ADO config to .ado.env
+              cat > .ado.env << 'EOFADO'
+              ADO_ORG_URL="$(ADO_ORG_URL)"
+              ADO_PAT="$(ADO_PAT)"
+              ADO_PROJECT="$(ADO_PROJECT)"
+              ADO_POOL="DNS-Lab-Pool"
+              EOFADO
+              
+              echo "✅ ADO configuration saved to .ado.env"
+            displayName: '3. Configure Azure DevOps'
+            workingDirectory: '$(Build.SourcesDirectory)'
+
+          - script: |
+              echo "=== Handling SSH Key ==="
+              mkdir -p "$HOME/.ssh"
+              chmod 700 "$HOME/.ssh"
+              
+              if [ -f "$(sshKey.secureFilePath)" ]; then
+                  echo "✅ Found SSH key in Secure Files"
+                  cp "$(sshKey.secureFilePath)" "$HOME/.ssh/terraform_lab_key"
+                  chmod 600 "$HOME/.ssh/terraform_lab_key"
+                  
+                  # Generate public key from private key (no password needed)
+                  ssh-keygen -y -f "$HOME/.ssh/terraform_lab_key" > "$HOME/.ssh/terraform_lab_key.pub"
+                  echo "✅ Public key derived from secure file"
+              else
+                  echo "⚠️ No SSH key found in Secure Files. Generating new key..."
+                  chmod +x ./scripts/generate-ssh-key.sh
+                  ./scripts/generate-ssh-key.sh --force
+                  echo "✅ New SSH key generated"
+                  echo "⚠️ Upload ~/.ssh/terraform_lab_key to Secure Files as 'terraform_lab_key' for future runs"
+              fi
+              
+              # Show public key for reference
+              echo ""
+              echo "Public Key:"
+              cat "$HOME/.ssh/terraform_lab_key.pub"
+            displayName: '4. Setup SSH Key'
+            workingDirectory: '$(Build.SourcesDirectory)'
+
+          - script: |
+              echo "=== Updating terraform.tfvars ==="
+              
+              # Update with SSH public key
+              SSH_PUB_KEY=$(cat "$HOME/.ssh/terraform_lab_key.pub")
+              if grep -q "^admin_ssh_key" terraform.tfvars; then
+                ESCAPED_KEY=$(echo "$SSH_PUB_KEY" | sed 's|/|\\/|g')
+                sed -i "s|^admin_ssh_key.*|admin_ssh_key = \"$ESCAPED_KEY\"|" terraform.tfvars
+              else
+                echo "admin_ssh_key = \"$SSH_PUB_KEY\"" >> terraform.tfvars
+              fi
+              
+              # Update with ADO variables
+              if grep -q "^ado_org_url" terraform.tfvars; then
+                sed -i "s|^ado_org_url.*|ado_org_url = \"$(ADO_ORG_URL)\"|" terraform.tfvars
+              else
+                echo "ado_org_url = \"$(ADO_ORG_URL)\"" >> terraform.tfvars
+              fi
+              
+              if grep -q "^ado_pat" terraform.tfvars; then
+                sed -i "s|^ado_pat.*|ado_pat = \"$(ADO_PAT)\"|" terraform.tfvars
+              else
+                echo "ado_pat = \"$(ADO_PAT)\"" >> terraform.tfvars
+              fi
+              
+              if grep -q "^ado_pool_name" terraform.tfvars; then
+                sed -i "s|^ado_pool_name.*|ado_pool_name = \"DNS-Lab-Pool\"|" terraform.tfvars
+              else
+                echo "ado_pool_name = \"DNS-Lab-Pool\"" >> terraform.tfvars
+              fi
+              
+              echo "✅ terraform.tfvars updated"
+            displayName: '5. Update Terraform Variables'
+            workingDirectory: '$(Build.SourcesDirectory)'
+
+          - task: AzureCLI@2
+            displayName: '6. Deploy Infrastructure (Terraform)'
             inputs:
               azureSubscription: 'LabConnection'
               scriptType: 'bash'
@@ -57,145 +165,6 @@ stages:
               inlineScript: |
                 set -e
                 
-                # Ensure we are in the repo root
-                cd "$(Build.SourcesDirectory)"
-                SOURCE_DIR="$(pwd)"
-                echo "Working Directory: $SOURCE_DIR"
-                ls -la
-                
-                # Export variables
-                export ADO_ORG_URL="$(ADO_ORG_URL)"
-                export ADO_PAT="$(ADO_PAT)"
-                export ADO_PROJECT="$(ADO_PROJECT)"
-                # Force the target pool for the lab agent to be DNS-Lab-Pool
-                export ADO_POOL="DNS-Lab-Pool"
-                # Handle AZURE_TENANT safely (it might be missing from variable group)
-                if [ -n "$(AZURE_TENANT)" ] && [ "$(AZURE_TENANT)" != "\$(AZURE_TENANT)" ]; then
-                  export AZURE_TENANT="$(AZURE_TENANT)"
-                else
-                  echo "⚠️ AZURE_TENANT not found in variables, using default or empty"
-                  export AZURE_TENANT=""
-                fi
-                export REQUESTED_FOR="$(Build.RequestedFor)"
-                
-                echo "=== Debug: Checking Scripts Directory ==="
-                ls -la scripts/
-                
-                echo "=== [1] Checking Prerequisites ==="
-                for tool in az terraform jq ssh; do
-                  if ! command -v "$tool" > /dev/null 2>&1; then
-                    echo "❌ Missing tool: $tool"
-                    exit 1
-                  else
-                    echo "✅ Found: $tool"
-                  fi
-                done
-                
-                echo ""
-                echo "=== [2] Checking Azure Login ==="
-                if ! az account show > /dev/null 2>&1; then
-                  echo "❌ Not logged in to Azure"
-                  exit 1
-                fi
-                SUB_NAME=$(az account show --query name -o tsv)
-                SUB_ID=$(az account show --query id -o tsv)
-                echo "✅ Logged in to: $SUB_NAME ($SUB_ID)"
-                
-                echo ""
-                echo "=== [3] Configuring Azure DevOps ==="
-                echo "ADO_ORG_URL: $ADO_ORG_URL"
-                echo "ADO_PROJECT: $ADO_PROJECT"
-                echo "ADO_POOL: $ADO_POOL"
-                echo "Pool configured: $ADO_POOL (self-hosted). Agent registration required."
-                
-                if [ -z "$ADO_ORG_URL" ] || [ -z "$ADO_PAT" ] || [ -z "$ADO_PROJECT" ] || [ -z "$ADO_POOL" ]; then
-                  echo "❌ ERROR: Missing required ADO variables in variable group"
-                  exit 1
-                fi
-                
-                # Save ADO config to .ado.env
-                cat > "${SOURCE_DIR}/.ado.env" << 'EOF'
-                ADO_ORG_URL="$ADO_ORG_URL"
-                ADO_PAT="$ADO_PAT"
-                ADO_PROJECT="$ADO_PROJECT"
-                ADO_POOL="$ADO_POOL"
-                AZURE_TENANT="$AZURE_TENANT"
-                EOF
-                
-                export AZURE_DEVOPS_EXT_PAT="$ADO_PAT"
-                echo "✅ ADO configuration saved"
-                
-                echo ""
-                echo "=== [4] Handling SSH Key ==="
-                mkdir -p "$HOME/.ssh"
-                chmod 700 "$HOME/.ssh"
-                
-                if [ -f "$(sshKey.secureFilePath)" ]; then
-                    echo "✅ Found existing SSH key in Secure Files"
-                    cp "$(sshKey.secureFilePath)" "$HOME/.ssh/terraform_lab_key"
-                    chmod 600 "$HOME/.ssh/terraform_lab_key"
-                    
-                    # Handle encrypted key if password is provided
-                    if [ -n "$SSH_PASSWORD" ]; then
-                        echo "🔐 Decrypting SSH key for automation use..."
-                        # Remove passphrase for non-interactive use
-                        # Use expect or similar if ssh-keygen -p fails non-interactively, but -P -N usually works
-                        # If it fails, we might need to install 'expect' or just fail gracefully
-                        if ! ssh-keygen -p -f "$HOME/.ssh/terraform_lab_key" -P "$SSH_PASSWORD" -N "" 2>/dev/null; then
-                             echo "❌ Failed to decrypt SSH key. Verify SSH_PASSWORD matches the key passphrase."
-                             echo "   Attempting to proceed (key might not be encrypted)..."
-                        else
-                             echo "✅ SSH key decrypted"
-                        fi
-                    fi
-
-                    # Generate public key from private key
-                    if ! ssh-keygen -y -f "$HOME/.ssh/terraform_lab_key" > "$HOME/.ssh/terraform_lab_key.pub"; then
-                        echo "❌ Failed to derive public key. The private key might still be encrypted or invalid."
-                        exit 1
-                    fi
-                    echo "✅ Public key derived from secure file"
-                else
-                    echo "⚠️ No SSH key found in Secure Files. Generating new key..."
-                    cd "$SOURCE_DIR"
-                    chmod +x ./scripts/generate-ssh-key.sh
-                    ./scripts/generate-ssh-key.sh --force
-                    echo "✅ New SSH key generated"
-                    echo "⚠️ NOTE: You should upload '$HOME/.ssh/terraform_lab_key' to Secure Files as 'terraform_lab_key' for future runs."
-                fi
-                
-                # Update terraform.tfvars with SSH public key
-                SSH_PUB_KEY=$(cat "$HOME/.ssh/terraform_lab_key.pub")
-                TFVARS_FILE="terraform.tfvars"
-                if grep -q "^admin_ssh_key" "$TFVARS_FILE"; then
-                  ESCAPED_KEY=$(echo "$SSH_PUB_KEY" | sed 's|/|\\/|g')
-                  sed -i "s|^admin_ssh_key.*|admin_ssh_key = \"$ESCAPED_KEY\"|" "$TFVARS_FILE"
-                else
-                  echo "admin_ssh_key = \"$SSH_PUB_KEY\"" >> "$TFVARS_FILE"
-                fi
-                
-                echo ""
-                echo "=== [5] Deploying Infrastructure (Terraform) ==="
-                
-                # Update terraform.tfvars with ADO variables
-                if grep -q "^ado_org_url" "$TFVARS_FILE"; then
-                  sed -i "s|^ado_org_url.*|ado_org_url = \"$ADO_ORG_URL\"|" "$TFVARS_FILE"
-                else
-                  echo "ado_org_url = \"$ADO_ORG_URL\"" >> "$TFVARS_FILE"
-                fi
-                
-                if grep -q "^ado_pat" "$TFVARS_FILE"; then
-                  sed -i "s|^ado_pat.*|ado_pat = \"$ADO_PAT\"|" "$TFVARS_FILE"
-                else
-                  echo "ado_pat = \"$ADO_PAT\"" >> "$TFVARS_FILE"
-                fi
-                
-                if grep -q "^ado_pool_name" "$TFVARS_FILE"; then
-                  sed -i "s|^ado_pool_name.*|ado_pool_name = \"$ADO_POOL\"|" "$TFVARS_FILE"
-                else
-                  echo "ado_pool_name = \"$ADO_POOL\"" >> "$TFVARS_FILE"
-                fi
-                
                 # Initialize Terraform if needed
                 if [ ! -d ".terraform" ]; then
                   echo "→ Initializing Terraform..."
@@ -203,25 +172,46 @@ stages:
                   echo "✅ Terraform initialized"
                 fi
                 
-                # Plan and apply
+                # Plan
                 echo "→ Planning infrastructure deployment..."
                 terraform plan -out=tfplan -detailed-exitcode -compact-warnings || true
                 
+                # Apply
                 echo "→ Deploying Azure resources (this takes ~5-7 minutes)..."
                 echo "  Resources: Resource Group, VNet, Subnet, NSGs, Key Vault, Private Endpoint, DNS Zone, VM..."
                 terraform apply -auto-approve tfplan
                 
                 echo "✅ Infrastructure deployed"
+
+          - task: AzureCLI@2
+            displayName: '7. Configure Pipeline'
+            inputs:
+              azureSubscription: 'LabConnection'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              workingDirectory: '$(Build.SourcesDirectory)'
+              inlineScript: |
+                set -e
+                export AZURE_DEVOPS_EXT_PAT="$(ADO_PAT)"
+                export ADO_ORG_URL="$(ADO_ORG_URL)"
+                export ADO_PAT="$(ADO_PAT)"
+                export ADO_PROJECT="$(ADO_PROJECT)"
+                export ADO_POOL="DNS-Lab-Pool"
                 
-                echo ""
-                echo "=== [6] Configuring Pipeline ==="
                 echo "→ Creating Azure DevOps service connection and pipeline..."
                 chmod +x ./scripts/setup-pipeline.sh
                 ./scripts/setup-pipeline.sh
                 echo "✅ Pipeline configured"
-                
-                echo ""
-                echo "=== [7] Validating Lab Environment ==="
+
+          - task: AzureCLI@2
+            displayName: '8. Validate Lab Environment'
+            inputs:
+              azureSubscription: 'LabConnection'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              workingDirectory: '$(Build.SourcesDirectory)'
+              inlineScript: |
+                set -e
                 chmod +x ./scripts/validate-base.sh
                 ./scripts/validate-base.sh
                 
@@ -229,6 +219,5 @@ stages:
                 echo "=== Lab Setup Complete ==="
                 echo "All infrastructure and pipelines are ready."
                 echo "Agents run in self-hosted pool: DNS-Lab-Pool"
-                echo "If no agent is present, run ./scripts/register-agent.sh after infrastructure deploy"
+                echo "Run ./scripts/register-agent.sh to register the lab agent"
                 echo "Next: See labs/lab1/README.md to start Lab 1"
-                echo "Cleanup: Run ./destroy.sh when finished"
