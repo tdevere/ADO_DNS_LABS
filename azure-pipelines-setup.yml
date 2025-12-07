@@ -4,7 +4,175 @@ pr: none
 variables:
   - group: LabConfiguration
 
-extends:
-  template: pipelines/lab.lifecycle.yml
-  parameters:
-    action: setup
+stages:
+  - stage: Setup
+    displayName: 'DNS Lab - Setup'
+    jobs:
+      - job: SetupLab
+        displayName: 'Setup Lab Environment'
+        pool:
+          name: 'ADO-Pipeline-Network-Troubleshooting-Labs-Pool'
+        steps:
+          - checkout: self
+
+          - script: |
+              echo "=== Lab Setup Pipeline ==="
+              echo "Triggered by: $(Build.RequestedFor)"
+              echo "Build ID: $(Build.BuildId)"
+            displayName: 'Display Context'
+
+          - script: |
+              curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+              wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+              echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+              sudo apt-get update && sudo apt-get install -y terraform jq
+            displayName: 'Install Azure CLI, Terraform, and jq'
+
+          - script: |
+              echo "=== DEBUG: Variable Group Values ==="
+              echo "ADO_ORG_URL: $(ADO_ORG_URL)"
+              echo "ADO_PROJECT: $(ADO_PROJECT)"
+              echo "ADO_POOL: $(ADO_POOL)"
+              echo "AZURE_TENANT: $(AZURE_TENANT)"
+              echo "===================================="
+            displayName: 'Debug: Check Variables'
+
+          - task: AzureCLI@2
+            displayName: 'Setup Lab Environment'
+            inputs:
+              azureSubscription: 'LabConnection'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                set -e
+                
+                # Export variables
+                export ADO_ORG_URL="$(ADO_ORG_URL)"
+                export ADO_PAT="$(ADO_PAT)"
+                export ADO_PROJECT="$(ADO_PROJECT)"
+                export ADO_POOL="$(ADO_POOL)"
+                export AZURE_TENANT="$(AZURE_TENANT)"
+                export REQUESTED_FOR="$(Build.RequestedFor)"
+                
+                echo "=== 1️⃣  Checking Prerequisites ==="
+                for tool in az terraform jq ssh; do
+                  if ! command -v "$tool" > /dev/null 2>&1; then
+                    echo "❌ Missing tool: $tool"
+                    exit 1
+                  else
+                    echo "✅ Found: $tool"
+                  fi
+                done
+                
+                echo ""
+                echo "=== 2️⃣  Checking Azure Login ==="
+                if ! az account show > /dev/null 2>&1; then
+                  echo "❌ Not logged in to Azure"
+                  exit 1
+                fi
+                SUB_NAME=$(az account show --query name -o tsv)
+                SUB_ID=$(az account show --query id -o tsv)
+                echo "✅ Logged in to: $SUB_NAME ($SUB_ID)"
+                
+                echo ""
+                echo "=== 3️⃣  Configuring Azure DevOps ==="
+                echo "ADO_ORG_URL: $ADO_ORG_URL"
+                echo "ADO_PROJECT: $ADO_PROJECT"
+                echo "ADO_POOL: $ADO_POOL"
+                
+                if [ -z "$ADO_ORG_URL" ] || [ -z "$ADO_PAT" ] || [ -z "$ADO_PROJECT" ] || [ -z "$ADO_POOL" ]; then
+                  echo "❌ ERROR: Missing required ADO variables in variable group"
+                  exit 1
+                fi
+                
+                # Save ADO config to .ado.env
+                cat > .ado.env << EOF
+                ADO_ORG_URL="$ADO_ORG_URL"
+                ADO_PAT="$ADO_PAT"
+                ADO_PROJECT="$ADO_PROJECT"
+                ADO_POOL="$ADO_POOL"
+                AZURE_TENANT="$AZURE_TENANT"
+                EOF
+                
+                export AZURE_DEVOPS_EXT_PAT="$ADO_PAT"
+                echo "✅ ADO configuration saved"
+                
+                echo ""
+                echo "=== 4️⃣  Generating SSH Key ==="
+                chmod +x ./scripts/generate-ssh-key.sh
+                ./scripts/generate-ssh-key.sh --force
+                echo "✅ SSH key generated"
+                
+                # Update terraform.tfvars with SSH public key
+                SSH_PUB_KEY=$(cat "$HOME/.ssh/terraform_lab_key.pub")
+                TFVARS_FILE="terraform.tfvars"
+                if grep -q "^admin_ssh_key" "$TFVARS_FILE"; then
+                  ESCAPED_KEY=$(echo "$SSH_PUB_KEY" | sed 's|/|\\/|g')
+                  sed -i "s|^admin_ssh_key.*|admin_ssh_key = \"$ESCAPED_KEY\"|" "$TFVARS_FILE"
+                else
+                  echo "admin_ssh_key = \"$SSH_PUB_KEY\"" >> "$TFVARS_FILE"
+                fi
+                
+                echo ""
+                echo "=== 5️⃣  Deploying Infrastructure (Terraform) ==="
+                
+                # Update terraform.tfvars with ADO variables
+                if grep -q "^ado_org_url" "$TFVARS_FILE"; then
+                  sed -i "s|^ado_org_url.*|ado_org_url = \"$ADO_ORG_URL\"|" "$TFVARS_FILE"
+                else
+                  echo "ado_org_url = \"$ADO_ORG_URL\"" >> "$TFVARS_FILE"
+                fi
+                
+                if grep -q "^ado_pat" "$TFVARS_FILE"; then
+                  sed -i "s|^ado_pat.*|ado_pat = \"$ADO_PAT\"|" "$TFVARS_FILE"
+                else
+                  echo "ado_pat = \"$ADO_PAT\"" >> "$TFVARS_FILE"
+                fi
+                
+                if grep -q "^ado_pool_name" "$TFVARS_FILE"; then
+                  sed -i "s|^ado_pool_name.*|ado_pool_name = \"$ADO_POOL\"|" "$TFVARS_FILE"
+                else
+                  echo "ado_pool_name = \"$ADO_POOL\"" >> "$TFVARS_FILE"
+                fi
+                
+                # Initialize Terraform if needed
+                if [ ! -d ".terraform" ]; then
+                  echo "→ Initializing Terraform..."
+                  terraform init
+                  echo "✅ Terraform initialized"
+                fi
+                
+                # Plan and apply
+                echo "→ Planning infrastructure deployment..."
+                terraform plan -out=tfplan -detailed-exitcode -compact-warnings || true
+                
+                echo "→ Deploying Azure resources (this takes ~5-7 minutes)..."
+                echo "  Resources: Resource Group, VNet, Subnet, NSGs, Key Vault, Private Endpoint, DNS Zone, VM..."
+                terraform apply -auto-approve tfplan
+                
+                echo "✅ Infrastructure deployed"
+                
+                echo ""
+                echo "=== 6️⃣  Registering Agent ==="
+                echo "→ Configuring self-hosted agent on VM (2-3 minutes)..."
+                chmod +x ./scripts/register-agent.sh
+                ./scripts/register-agent.sh
+                echo "✅ Agent registered"
+                
+                echo ""
+                echo "=== 7️⃣  Configuring Pipeline ==="
+                echo "→ Creating Azure DevOps service connection and pipeline..."
+                chmod +x ./scripts/setup-pipeline.sh
+                ./scripts/setup-pipeline.sh
+                echo "✅ Pipeline configured"
+                
+                echo ""
+                echo "=== 8️⃣  Validating Lab Environment ==="
+                chmod +x ./scripts/validate-base.sh
+                ./scripts/validate-base.sh
+                
+                echo ""
+                echo "=== 🎉 Lab Setup Complete! ==="
+                echo "All infrastructure, agents, and pipelines are ready."
+                echo "Next: See labs/lab1/README.md to start Lab 1"
+                echo "Cleanup: Run ./destroy.sh when finished"
