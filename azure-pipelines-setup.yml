@@ -99,6 +99,7 @@ stages:
                 
                 echo ""
                 echo "=== 4️⃣  Generating SSH Key ==="
+                cd $(Build.SourcesDirectory)
                 chmod +x ./scripts/generate-ssh-key.sh
                 ./scripts/generate-ssh-key.sh --force
                 echo "✅ SSH key generated"
@@ -155,14 +156,14 @@ stages:
                 echo ""
                 echo "=== 6️⃣  Configuring Pipeline ==="
                 echo "→ Creating Azure DevOps service connection and pipeline..."
-                chmod +x ./scripts/setup-pipeline.sh
-                ./scripts/setup-pipeline.sh
+                chmod +x $(Build.SourcesDirectory)/scripts/setup-pipeline.sh
+                $(Build.SourcesDirectory)/scripts/setup-pipeline.sh
                 echo "✅ Pipeline configured"
                 
                 echo ""
                 echo "=== 7️⃣  Validating Lab Environment ==="
-                chmod +x ./scripts/validate-base.sh
-                ./scripts/validate-base.sh
+                chmod +x $(Build.SourcesDirectory)/scripts/validate-base.sh
+                $(Build.SourcesDirectory)/scripts/validate-base.sh
                 
                 echo ""
                 echo "=== 🎉 Lab Setup Complete! ==="
