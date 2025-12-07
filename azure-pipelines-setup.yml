@@ -57,9 +57,19 @@ stages:
                 export ADO_ORG_URL="$(ADO_ORG_URL)"
                 export ADO_PAT="$(ADO_PAT)"
                 export ADO_PROJECT="$(ADO_PROJECT)"
-                export ADO_POOL="$(ADO_POOL)"
-                export AZURE_TENANT="$(AZURE_TENANT)"
+                # Force the target pool for the lab agent to be DNS-Lab-Pool
+                export ADO_POOL="DNS-Lab-Pool"
+                # Handle AZURE_TENANT safely (it might be missing from variable group)
+                if [ -n "$(AZURE_TENANT)" ] && [ "$(AZURE_TENANT)" != "\$(AZURE_TENANT)" ]; then
+                  export AZURE_TENANT="$(AZURE_TENANT)"
+                else
+                  echo "⚠️ AZURE_TENANT not found in variables, using default or empty"
+                  export AZURE_TENANT=""
+                fi
                 export REQUESTED_FOR="$(Build.RequestedFor)"
+                
+                echo "=== Debug: Checking Scripts Directory ==="
+                ls -la scripts/
                 
                 echo "=== [1] Checking Prerequisites ==="
                 for tool in az terraform jq ssh; do
