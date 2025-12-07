@@ -4,13 +4,7 @@ pr: none
 variables:
   - group: LabConfiguration
 
-parameters:
-  - name: studentAlias
-    type: string
-    default: ''
-
 extends:
   template: pipelines/lab.lifecycle.yml
   parameters:
     action: setup
-    studentAlias: ${{ parameters.studentAlias }}

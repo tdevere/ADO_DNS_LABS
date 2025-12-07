@@ -5,9 +5,6 @@ parameters:
       - setup
       - break
       - destroy
-  - name: studentAlias
-    type: string
-    default: ''
   - name: labNumber
     type: string
     default: ''
@@ -17,20 +14,20 @@ stages:
     displayName: DNS Lab - ${{ parameters.action }}
     jobs:
       - job: LabJob
-        displayName: Run ${{ parameters.action }} for $(Build.SourceBranchName)
+        displayName: Run ${{ parameters.action }} for $(Build.RequestedFor)
         pool:
           name: 'ADO-Pipeline-Network-Troubleshooting-Labs-Pool'
         steps:
           - checkout: self
 
           - script: |
-              echo "Branch: $(Build.SourceBranchName)"
-              echo "Student Alias: ${{ parameters.studentAlias }}"
+              echo "Build triggered by: $(Build.RequestedFor)"
+              echo "Lab action: ${{ parameters.action }}"
             displayName: 'Display Context'
 
           - script: |
-              if [ -z "${{ parameters.studentAlias }}" ]; then
-                echo "##vso[task.logissue type=error]studentAlias parameter is required."
+              if [ -z "${{ parameters.labNumber }}" ] && [[ "${{ parameters.action }}" == "break" ]]; then
+                echo "##vso[task.logissue type=error]labNumber parameter is required for break action."
                 exit 1
               fi
             displayName: 'Validate Parameters'
@@ -48,8 +45,8 @@ stages:
               echo "ADO_PROJECT: $(ADO_PROJECT)"
               echo "ADO_POOL: $(ADO_POOL)"
               echo "AZURE_TENANT: $(AZURE_TENANT)"
-              echo "studentAlias: ${{ parameters.studentAlias }}"
-              echo "labNumber: ${{ parameters.labNumber }}"
+              echo "Build.RequestedFor: $(Build.RequestedFor)"
+              echo "LAB_NUMBER: ${{ parameters.labNumber }}"
               echo "==============================="
             displayName: 'Debug: Check Variables'
 
@@ -60,7 +57,7 @@ stages:
               scriptType: 'bash'
               scriptLocation: 'inlineScript'
               inlineScript: |
-                export STUDENT_ALIAS="${{ parameters.studentAlias }}"
+                export REQUESTED_FOR="$(Build.RequestedFor)"
                 export LAB_NUMBER="${{ parameters.labNumber }}"
                 export ADO_ORG_URL="$(ADO_ORG_URL)"
                 export ADO_PAT="$(ADO_PAT)"
@@ -69,15 +66,15 @@ stages:
                 export AZURE_TENANT="$(AZURE_TENANT)"
                 
                 echo "=== DEBUG: Script Environment ==="
+                echo "REQUESTED_FOR=${REQUESTED_FOR}"
                 echo "ADO_ORG_URL=${ADO_ORG_URL}"
                 echo "ADO_PROJECT=${ADO_PROJECT}"
                 echo "ADO_POOL=${ADO_POOL}"
                 echo "AZURE_TENANT=${AZURE_TENANT}"
-                echo "STUDENT_ALIAS=${STUDENT_ALIAS}"
                 echo "LAB_NUMBER=${LAB_NUMBER}"
                 echo "=================================="
                 echo ""
-                echo "Running action: ${{ parameters.action }} for user: $STUDENT_ALIAS"
+                echo "Running action: ${{ parameters.action }} for user: $REQUESTED_FOR"
 
                 case "${{ parameters.action }}" in
                   setup)

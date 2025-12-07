@@ -5,9 +5,6 @@ variables:
   - group: LabConfiguration
 
 parameters:
-  - name: studentAlias
-    type: string
-    default: ''
   - name: labNumber
     type: string
     default: '1'
@@ -16,5 +13,4 @@ extends:
   template: pipelines/lab.lifecycle.yml
   parameters:
     action: break
-    studentAlias: ${{ parameters.studentAlias }}
     labNumber: ${{ parameters.labNumber }}
