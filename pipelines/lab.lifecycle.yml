@@ -45,6 +45,17 @@ stages:
               sudo apt-get update && sudo apt-get install -y terraform
             displayName: 'Install Azure CLI and Terraform'
 
+          - script: |
+              echo "=== DEBUG: Available Variables ==="
+              echo "ADO_ORG_URL: $(ADO_ORG_URL)"
+              echo "ADO_PROJECT: $(ADO_PROJECT)"
+              echo "ADO_POOL: $(ADO_POOL)"
+              echo "AZURE_TENANT: $(AZURE_TENANT)"
+              echo "studentAlias: ${{ parameters.studentAlias }}"
+              echo "labNumber: ${{ parameters.labNumber }}"
+              echo "==============================="
+            displayName: 'Debug: Check Variables'
+
           - task: AzureCLI@2
             displayName: 'Run lab action: ${{ parameters.action }}'
             inputs:
