@@ -153,26 +153,20 @@ stages:
                 echo "✅ Infrastructure deployed"
                 
                 echo ""
-                echo "=== 6️⃣  Registering Agent ==="
-                echo "→ Configuring self-hosted agent on VM (2-3 minutes)..."
-                chmod +x ./scripts/register-agent.sh
-                ./scripts/register-agent.sh
-                echo "✅ Agent registered"
-                
-                echo ""
-                echo "=== 7️⃣  Configuring Pipeline ==="
+                echo "=== 6️⃣  Configuring Pipeline ==="
                 echo "→ Creating Azure DevOps service connection and pipeline..."
                 chmod +x ./scripts/setup-pipeline.sh
                 ./scripts/setup-pipeline.sh
                 echo "✅ Pipeline configured"
                 
                 echo ""
-                echo "=== 8️⃣  Validating Lab Environment ==="
+                echo "=== 7️⃣  Validating Lab Environment ==="
                 chmod +x ./scripts/validate-base.sh
                 ./scripts/validate-base.sh
                 
                 echo ""
                 echo "=== 🎉 Lab Setup Complete! ==="
-                echo "All infrastructure, agents, and pipelines are ready."
+                echo "All infrastructure and pipelines are ready."
+                echo "Agents are provided by the VMSS pool: ADO-Pipeline-Network-Troubleshooting-Labs-Pool"
                 echo "Next: See labs/lab1/README.md to start Lab 1"
                 echo "Cleanup: Run ./destroy.sh when finished"
