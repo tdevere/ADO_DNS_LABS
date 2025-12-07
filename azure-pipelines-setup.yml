@@ -43,10 +43,15 @@ stages:
               azureSubscription: 'LabConnection'
               scriptType: 'bash'
               scriptLocation: 'inlineScript'
+              workingDirectory: '$(Build.SourcesDirectory)'
               inlineScript: |
                 set -e
                 
-                SOURCE_DIR="$(Build.SourcesDirectory)"
+                # Ensure we are in the repo root
+                cd "$(Build.SourcesDirectory)"
+                SOURCE_DIR="$(pwd)"
+                echo "Working Directory: $SOURCE_DIR"
+                ls -la
                 
                 # Export variables
                 export ADO_ORG_URL="$(ADO_ORG_URL)"
