@@ -139,15 +139,21 @@ stages:
                     if [ -n "$SSH_PASSWORD" ]; then
                         echo "🔐 Decrypting SSH key for automation use..."
                         # Remove passphrase for non-interactive use
-                        ssh-keygen -p -f "$HOME/.ssh/terraform_lab_key" -P "$SSH_PASSWORD" -N "" || {
-                            echo "❌ Failed to decrypt SSH key with provided password"
-                            exit 1
-                        }
-                        echo "✅ SSH key decrypted"
+                        # Use expect or similar if ssh-keygen -p fails non-interactively, but -P -N usually works
+                        # If it fails, we might need to install 'expect' or just fail gracefully
+                        if ! ssh-keygen -p -f "$HOME/.ssh/terraform_lab_key" -P "$SSH_PASSWORD" -N "" 2>/dev/null; then
+                             echo "❌ Failed to decrypt SSH key. Verify SSH_PASSWORD matches the key passphrase."
+                             echo "   Attempting to proceed (key might not be encrypted)..."
+                        else
+                             echo "✅ SSH key decrypted"
+                        fi
                     fi
 
                     # Generate public key from private key
-                    ssh-keygen -y -f "$HOME/.ssh/terraform_lab_key" > "$HOME/.ssh/terraform_lab_key.pub"
+                    if ! ssh-keygen -y -f "$HOME/.ssh/terraform_lab_key" > "$HOME/.ssh/terraform_lab_key.pub"; then
+                        echo "❌ Failed to derive public key. The private key might still be encrypted or invalid."
+                        exit 1
+                    fi
                     echo "✅ Public key derived from secure file"
                 else
                     echo "⚠️ No SSH key found in Secure Files. Generating new key..."
