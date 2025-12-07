@@ -14,6 +14,7 @@ stages:
           name: 'ADO-Pipeline-Network-Troubleshooting-Labs-Pool'
         steps:
           - checkout: self
+            fetchDepth: 1
 
           - script: |
               echo "=== Lab Setup Pipeline ==="
