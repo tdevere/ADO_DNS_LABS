@@ -90,12 +90,12 @@ stages:
                 
                 # Save ADO config to .ado.env
                 cat > "${SOURCE_DIR}/.ado.env" << 'EOF'
-ADO_ORG_URL="$ADO_ORG_URL"
-ADO_PAT="$ADO_PAT"
-ADO_PROJECT="$ADO_PROJECT"
-ADO_POOL="$ADO_POOL"
-AZURE_TENANT="$AZURE_TENANT"
-EOF
+                ADO_ORG_URL="$ADO_ORG_URL"
+                ADO_PAT="$ADO_PAT"
+                ADO_PROJECT="$ADO_PROJECT"
+                ADO_POOL="$ADO_POOL"
+                AZURE_TENANT="$AZURE_TENANT"
+                EOF
                 
                 export AZURE_DEVOPS_EXT_PAT="$ADO_PAT"
                 echo "✅ ADO configuration saved"
