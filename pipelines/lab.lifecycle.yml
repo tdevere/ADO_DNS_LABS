@@ -35,6 +35,10 @@ stages:
               fi
             displayName: 'Validate Parameters'
 
+          - script: |
+              curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+            displayName: 'Install Azure CLI'
+
           - task: AzureCLI@2
             displayName: 'Run lab action: ${{ parameters.action }}'
             inputs:
