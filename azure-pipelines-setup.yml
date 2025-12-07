@@ -11,7 +11,7 @@ stages:
       - job: SetupLab
         displayName: 'Setup Lab Environment'
         pool:
-          name: 'DNS-Lab-Pool'
+          name: 'ADO-Pipeline-Network-Troubleshooting-Labs-Pool'
         steps:
           - checkout: self
 
