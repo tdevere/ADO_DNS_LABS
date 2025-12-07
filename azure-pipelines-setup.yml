@@ -1,6 +1,9 @@
 trigger: none
 pr: none
 
+variables:
+  - group: LabConfiguration
+
 parameters:
   - name: studentAlias
     type: string

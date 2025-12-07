@@ -12,9 +12,6 @@ parameters:
     type: string
     default: ''
 
-variables:
-  - group: LabConfiguration
-
 stages:
   - stage: LabStage
     displayName: DNS Lab - ${{ parameters.action }}
