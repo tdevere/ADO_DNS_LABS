@@ -1,0 +1,159 @@
+# Azure DevOps Pipeline - DNS Lab Application
+# Purpose: Build and run a Node.js app that retrieves configuration from Key Vault via private endpoint
+
+trigger: none
+
+pool:
+  name: DNS-Lab-Pool  # Self-hosted agent pool
+
+variables:
+  - name: KeyVaultName
+    value: 'kv-dns-lab-5fc57a92'  # Placeholder replaced by setup-pipeline.sh
+
+stages:
+- stage: RetrieveConfig
+  displayName: 'Retrieve Configuration from Key Vault'
+  jobs:
+  - job: GetSecret
+    displayName: 'Fetch App Configuration'
+    steps:
+    - task: AzureKeyVault@2
+      displayName: 'Get Message from Key Vault'
+      timeoutInMinutes: 1
+      inputs:
+        ConnectedServiceName: 'SC-DNSLAB-1764957302'  # Replaced by setup-pipeline.sh
+        KeyVaultName: '$(KeyVaultName)'
+        SecretsFilter: 'AppMessage'
+        RunAsPreJob: false
+
+    - bash: |
+        if [ -z "$(AppMessage)" ]; then
+          echo "##vso[task.logissue type=error]Failed to retrieve AppMessage from Key Vault"
+          echo "This usually indicates a DNS resolution issue with the private endpoint."
+          echo ""
+          echo "Troubleshooting DNS:"
+          echo "  1. Check DNS resolution: nslookup $(KeyVaultName).vault.azure.net"
+          echo "  2. Verify IP is in private endpoint range (10.1.2.0/24)"
+          echo "  3. Check Private DNS zone VNet link exists"
+          echo "  4. Verify A record in Private DNS zone"
+          exit 1
+        fi
+        echo "✓ Successfully retrieved configuration from Key Vault"
+        echo "Message: $(AppMessage)"
+      displayName: 'Verify Secret Retrieval'
+      name: ValidateConfig
+
+- stage: Build
+  displayName: 'Build Application'
+  dependsOn: RetrieveConfig
+  jobs:
+  - job: BuildApp
+    displayName: 'Build Node.js App'
+    steps:
+    - bash: |
+        # Install Node.js and npm if not present
+        if ! command -v npm &> /dev/null; then
+          echo "npm not found, installing Node.js LTS..."
+          curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+          sudo apt-get install -y nodejs
+          echo "✓ Node.js $(node --version) and npm $(npm --version) installed"
+        else
+          echo "✓ Node.js $(node --version) and npm $(npm --version) already installed"
+        fi
+      displayName: 'Install Node.js and npm'
+
+    - bash: |
+        mkdir -p app
+        cd app
+        
+        # Create package.json
+        cat > package.json <<'PACKAGEJSON'
+        {
+          "name": "dns-lab-app",
+          "version": "1.0.0",
+          "description": "DNS Lab Demo Application",
+          "main": "index.js",
+          "scripts": {
+            "start": "node index.js"
+          },
+          "dependencies": {}
+        }
+        PACKAGEJSON
+        
+        # Create the application
+        cat > index.js <<'INDEXJS'
+        const message = process.env.APP_MESSAGE || 'No message configured';
+        
+        console.log('\n' + '='.repeat(60));
+        console.log('  DNS LAB APPLICATION');
+        console.log('='.repeat(60));
+        console.log('');
+        console.log('Configuration retrieved from Azure Key Vault');
+        console.log('via Private Endpoint with Private DNS Zone');
+        console.log('');
+        console.log('✓ Secret successfully retrieved and available to application');
+        console.log('✓ Message length:', message.length, 'characters');
+        console.log('');
+        
+        // Check if message indicates an error condition
+        if (message.includes('ERROR')) {
+          console.log('⚠️  Configuration indicates a problem:');
+          console.log('   Message starts with:', message.substring(0, 30) + '...');
+          console.log('');
+          console.log('='.repeat(60));
+          console.log('✗ Lab exercise detected - troubleshoot DNS configuration');
+          console.log('='.repeat(60) + '\n');
+          process.exit(1);
+        } else {
+          console.log('='.repeat(60));
+          console.log('✓ Lab completed successfully!');
+          console.log('='.repeat(60) + '\n');
+          process.exit(0);
+        }
+        INDEXJS
+        
+        echo "✓ Application files created"
+        ls -la
+      displayName: 'Create Node.js Application'
+
+    - bash: |
+        cd app
+        npm install
+        echo "✓ Dependencies installed"
+      displayName: 'Install Dependencies'
+
+    - task: PublishBuildArtifacts@1
+      inputs:
+        PathtoPublish: 'app'
+        ArtifactName: 'dns-lab-app'
+      displayName: 'Publish Application Artifact'
+
+- stage: Deploy
+  displayName: 'Run Application'
+  dependsOn: Build
+  jobs:
+  - job: RunApp
+    displayName: 'Execute Application'
+    steps:
+    - task: DownloadBuildArtifacts@1
+      inputs:
+        buildType: 'current'
+        downloadType: 'single'
+        artifactName: 'dns-lab-app'
+        downloadPath: '$(System.ArtifactsDirectory)'
+      displayName: 'Download Application'
+
+    - task: AzureKeyVault@2
+      displayName: 'Retrieve Message from Key Vault'
+      inputs:
+        ConnectedServiceName: 'SC-DNSLAB-1764957302'
+        KeyVaultName: '$(KeyVaultName)'
+        SecretsFilter: 'AppMessage'
+
+    - bash: |
+        cd $(System.ArtifactsDirectory)/dns-lab-app
+        export APP_MESSAGE="$(AppMessage)"
+        npm start
+      displayName: 'Run DNS Lab Application'
+      env:
+        APP_MESSAGE: $(AppMessage)

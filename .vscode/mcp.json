@@ -1,0 +1,24 @@
+{
+	"servers": {
+		"microsoftdocs/mcp": {
+			"type": "http",
+			"url": "https://learn.microsoft.com/api/mcp",
+			"gallery": "https://api.mcp.github.com",
+			"version": "1.0.0"
+		}
+	},
+	"inputs": [
+		{
+			"id": "ado_org",
+			"type": "promptString",
+			"description": "Azure DevOps organization name (e.g., contoso).",
+			"password": false
+		},
+		{
+			"id": "ado_domain",
+			"type": "promptString",
+			"description": "Repeat to enable specific domains: core, work, work-items, search, test-plans, repositories, wiki, pipelines, advanced-security.",
+			"password": false
+		}
+	]
+}

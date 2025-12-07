@@ -1,0 +1,75 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: action
+    type: string
+    values:
+      - setup
+      - break
+      - destroy
+  - name: studentAlias
+    type: string
+    default: ''
+  - name: labNumber
+    type: string
+    default: ''
+
+stages:
+  - stage: LabStage
+    displayName: DNS Lab - ${{ parameters.action }}
+    jobs:
+      - job: LabJob
+        displayName: Run ${{ parameters.action }} for $(Build.SourceBranchName)
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+
+          - script: |
+              echo "Branch: $(Build.SourceBranchName)"
+              echo "Student Alias: ${{ parameters.studentAlias }}"
+            displayName: 'Display Context'
+
+          - script: |
+              if [ -z "${{ parameters.studentAlias }}" ]; then
+                echo "##vso[task.logissue type=error]studentAlias parameter is required."
+                exit 1
+              fi
+            displayName: 'Validate Parameters'
+
+          - task: AzureCLI@2
+            displayName: Run lab action: ${{ parameters.action }}
+            inputs:
+              azureSubscription: 'LabConnection'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                export STUDENT_ALIAS="${{ parameters.studentAlias }}"
+                export LAB_NUMBER="${{ parameters.labNumber }}"
+                
+                # Logic to derive alias from branch name if needed (commented out as requested)
+                # if [ -z "$STUDENT_ALIAS" ]; then
+                #   STUDENT_ALIAS=$(echo $(Build.SourceBranchName) | cut -d'/' -f2)
+                # fi
+
+                echo "Running action: ${{ parameters.action }} for user: $STUDENT_ALIAS"
+
+                case "${{ parameters.action }}" in
+                  setup)
+                    chmod +x ./setup.sh
+                    ./setup.sh
+                    ;;
+                  break)
+                    chmod +x ./break-lab.sh
+                    ./break-lab.sh
+                    ;;
+                  destroy)
+                    chmod +x ./destroy.sh
+                    ./destroy.sh
+                    ;;
+                  *)
+                    echo "Unknown action: ${{ parameters.action }}"
+                    exit 1
+                    ;;
+                esac

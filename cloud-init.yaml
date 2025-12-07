@@ -1,0 +1,21 @@
+#cloud-config
+package_update: true
+packages:
+  - curl
+  - git
+  - jq
+  - libssl1.1
+  - libicu66
+
+runcmd:
+  # Create agent directory
+  - mkdir -p /home/azureuser/azagent
+  - chown azureuser:azureuser /home/azureuser/azagent
+  
+  # Download Agent (pre-downloading saves time later)
+  - cd /home/azureuser/azagent
+  - curl -O https://download.agent.dev.azure.com/agent/4.264.2/vsts-agent-linux-x64-4.264.2.tar.gz
+  - tar zxvf vsts-agent-linux-x64-4.264.2.tar.gz
+  - chown -R azureuser:azureuser /home/azureuser/azagent
+  
+  # Note: Configuration happens post-deployment via scripts/register-agent.sh
