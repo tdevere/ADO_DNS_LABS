@@ -1,0 +1,13 @@
+trigger: none
+pr: none
+
+parameters:
+  - name: studentAlias
+    type: string
+    default: ''
+
+extends:
+  template: pipelines/lab.lifecycle.yml
+  parameters:
+    action: setup
+    studentAlias: ${{ parameters.studentAlias }}
