@@ -19,7 +19,7 @@ stages:
       - job: LabJob
         displayName: Run ${{ parameters.action }} for $(Build.SourceBranchName)
         pool:
-          vmImage: 'ubuntu-latest'
+          name: 'ADO-Pipeline-Network-Troubleshooting-Labs-Pool'
         steps:
           - checkout: self
 
