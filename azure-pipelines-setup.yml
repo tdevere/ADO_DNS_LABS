@@ -46,6 +46,8 @@ stages:
               inlineScript: |
                 set -e
                 
+                SOURCE_DIR="$(Build.SourcesDirectory)"
+                
                 # Export variables
                 export ADO_ORG_URL="$(ADO_ORG_URL)"
                 export ADO_PAT="$(ADO_PAT)"
@@ -86,20 +88,20 @@ stages:
                 fi
                 
                 # Save ADO config to .ado.env
-                cat > .ado.env << EOF
-                ADO_ORG_URL="$ADO_ORG_URL"
-                ADO_PAT="$ADO_PAT"
-                ADO_PROJECT="$ADO_PROJECT"
-                ADO_POOL="$ADO_POOL"
-                AZURE_TENANT="$AZURE_TENANT"
-                EOF
+                cat > "${SOURCE_DIR}/.ado.env" << 'EOF'
+ADO_ORG_URL="$ADO_ORG_URL"
+ADO_PAT="$ADO_PAT"
+ADO_PROJECT="$ADO_PROJECT"
+ADO_POOL="$ADO_POOL"
+AZURE_TENANT="$AZURE_TENANT"
+EOF
                 
                 export AZURE_DEVOPS_EXT_PAT="$ADO_PAT"
                 echo "✅ ADO configuration saved"
                 
                 echo ""
                 echo "=== 4️⃣  Generating SSH Key ==="
-                cd $(Build.SourcesDirectory)
+                cd "$SOURCE_DIR"
                 chmod +x ./scripts/generate-ssh-key.sh
                 ./scripts/generate-ssh-key.sh --force
                 echo "✅ SSH key generated"
@@ -156,14 +158,14 @@ stages:
                 echo ""
                 echo "=== 6️⃣  Configuring Pipeline ==="
                 echo "→ Creating Azure DevOps service connection and pipeline..."
-                chmod +x $(Build.SourcesDirectory)/scripts/setup-pipeline.sh
-                $(Build.SourcesDirectory)/scripts/setup-pipeline.sh
+                chmod +x ./scripts/setup-pipeline.sh
+                ./scripts/setup-pipeline.sh
                 echo "✅ Pipeline configured"
                 
                 echo ""
                 echo "=== 7️⃣  Validating Lab Environment ==="
-                chmod +x $(Build.SourcesDirectory)/scripts/validate-base.sh
-                $(Build.SourcesDirectory)/scripts/validate-base.sh
+                chmod +x ./scripts/validate-base.sh
+                ./scripts/validate-base.sh
                 
                 echo ""
                 echo "=== 🎉 Lab Setup Complete! ==="
