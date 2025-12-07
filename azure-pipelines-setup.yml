@@ -38,6 +38,13 @@ stages:
               echo "===================================="
             displayName: 'Debug: Check Variables'
 
+          - task: DownloadSecureFile@1
+            name: sshKey
+            displayName: 'Download SSH Key'
+            inputs:
+              secureFile: 'terraform_lab_key'
+            continueOnError: true
+
           - task: AzureCLI@2
             displayName: 'Setup Lab Environment'
             inputs:
@@ -117,11 +124,25 @@ stages:
                 echo "✅ ADO configuration saved"
                 
                 echo ""
-                echo "=== [4] Generating SSH Key ==="
-                cd "$SOURCE_DIR"
-                chmod +x ./scripts/generate-ssh-key.sh
-                ./scripts/generate-ssh-key.sh --force
-                echo "✅ SSH key generated"
+                echo "=== [4] Handling SSH Key ==="
+                mkdir -p "$HOME/.ssh"
+                chmod 700 "$HOME/.ssh"
+                
+                if [ -f "$(sshKey.secureFilePath)" ]; then
+                    echo "✅ Found existing SSH key in Secure Files"
+                    cp "$(sshKey.secureFilePath)" "$HOME/.ssh/terraform_lab_key"
+                    chmod 600 "$HOME/.ssh/terraform_lab_key"
+                    # Generate public key from private key
+                    ssh-keygen -y -f "$HOME/.ssh/terraform_lab_key" > "$HOME/.ssh/terraform_lab_key.pub"
+                    echo "✅ Public key derived from secure file"
+                else
+                    echo "⚠️ No SSH key found in Secure Files. Generating new key..."
+                    cd "$SOURCE_DIR"
+                    chmod +x ./scripts/generate-ssh-key.sh
+                    ./scripts/generate-ssh-key.sh --force
+                    echo "✅ New SSH key generated"
+                    echo "⚠️ NOTE: You should upload '$HOME/.ssh/terraform_lab_key' to Secure Files as 'terraform_lab_key' for future runs."
+                fi
                 
                 # Update terraform.tfvars with SSH public key
                 SSH_PUB_KEY=$(cat "$HOME/.ssh/terraform_lab_key.pub")
