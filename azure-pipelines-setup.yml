@@ -132,6 +132,18 @@ stages:
                     echo "✅ Found existing SSH key in Secure Files"
                     cp "$(sshKey.secureFilePath)" "$HOME/.ssh/terraform_lab_key"
                     chmod 600 "$HOME/.ssh/terraform_lab_key"
+                    
+                    # Handle encrypted key if password is provided
+                    if [ -n "$SSH_PASSWORD" ]; then
+                        echo "🔐 Decrypting SSH key for automation use..."
+                        # Remove passphrase for non-interactive use
+                        ssh-keygen -p -f "$HOME/.ssh/terraform_lab_key" -P "$SSH_PASSWORD" -N "" || {
+                            echo "❌ Failed to decrypt SSH key with provided password"
+                            exit 1
+                        }
+                        echo "✅ SSH key decrypted"
+                    fi
+
                     # Generate public key from private key
                     ssh-keygen -y -f "$HOME/.ssh/terraform_lab_key" > "$HOME/.ssh/terraform_lab_key.pub"
                     echo "✅ Public key derived from secure file"
@@ -156,6 +168,8 @@ stages:
                 
                 echo ""
                 echo "=== [5] Deploying Infrastructure (Terraform) ==="
+            env:
+              SSH_PASSWORD: $(SSH_PASSWORD)
                 
                 # Update terraform.tfvars with ADO variables
                 if grep -q "^ado_org_url" "$TFVARS_FILE"; then
