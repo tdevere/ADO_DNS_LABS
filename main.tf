@@ -1,31 +1,6 @@
 data "azurerm_client_config" "current" {}
 data "azurerm_subscription" "current" {}
 
-resource "azuread_application" "lab_app" {
-  display_name = "sp-dns-lab-${random_id.suffix.hex}"
-  owners       = [data.azurerm_client_config.current.object_id]
-  
-  # Prevent Terraform from trying to manage this if it already exists and we can't delete it
-  lifecycle {
-    ignore_changes = [owners]
-  }
-}
-
-resource "azuread_service_principal" "lab_sp" {
-  client_id = azuread_application.lab_app.client_id
-  owners    = [data.azurerm_client_config.current.object_id]
-}
-
-resource "azuread_service_principal_password" "lab_sp_password" {
-  service_principal_id = azuread_service_principal.lab_sp.id
-}
-
-resource "azurerm_role_assignment" "sp_contributor" {
-  scope                = data.azurerm_subscription.current.id
-  role_definition_name = "Contributor"
-  principal_id         = azuread_service_principal.lab_sp.object_id
-}
-
 resource "random_id" "suffix" {
   byte_length = 4
 }
@@ -98,15 +73,6 @@ resource "azurerm_key_vault" "kv" {
   access_policy {
     tenant_id = data.azurerm_client_config.current.tenant_id
     object_id = data.azurerm_client_config.current.object_id
-
-    secret_permissions = [
-      "Get", "List", "Set", "Delete", "Recover", "Backup", "Restore", "Purge"
-    ]
-  }
-
-  access_policy {
-    tenant_id = data.azurerm_client_config.current.tenant_id
-    object_id = azuread_service_principal.lab_sp.object_id
 
     secret_permissions = [
       "Get", "List", "Set", "Delete", "Recover", "Backup", "Restore", "Purge"
