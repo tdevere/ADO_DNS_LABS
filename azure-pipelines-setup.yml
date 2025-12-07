@@ -47,6 +47,8 @@ stages:
 
           - task: AzureCLI@2
             displayName: 'Setup Lab Environment'
+            env:
+              SSH_PASSWORD: $(SSH_PASSWORD)
             inputs:
               azureSubscription: 'LabConnection'
               scriptType: 'bash'
@@ -168,8 +170,6 @@ stages:
                 
                 echo ""
                 echo "=== [5] Deploying Infrastructure (Terraform) ==="
-            env:
-              SSH_PASSWORD: $(SSH_PASSWORD)
                 
                 # Update terraform.tfvars with ADO variables
                 if grep -q "^ado_org_url" "$TFVARS_FILE"; then
