@@ -1457,7 +1457,9 @@ Next time a pipeline can't reach a private Azure resource:
 
 If you want to truly master this topic, these videos are the gold standard:
 - [Azure Private Link and DNS - The Missing Manual](https://www.youtube.com/watch?v=UVR9lhUGAyU) by John Savill
-- [Azure Private Endpoint DNS Configuration](https://www.youtube.com/watch?v=j9QmMEWmcfo) by John Savill
+- [SSL, TLS, HTTPS Explained](https://www.youtube.com/watch?v=j9QmMEWmcfo) by ByteByteGo
+- [Private Endpoints and DNS in Azure](https://youtu.be/V8PjtCTTT6c)
+
 
 ---
 
